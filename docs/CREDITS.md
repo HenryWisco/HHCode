@@ -44,3 +44,9 @@ SOFTWARE.
   listed in ROADMAP.md are reimplemented on the VEX API. If we ever copy an
   EZ-Template source file, that file must keep its MPL-2.0 header and stay
   under MPL-2.0.
+
+## Joystick curve
+
+The driver joystick curve in `src/hh/driver.cpp` uses the formula published by
+VEX team 5225A (the E-Bots PiLons), which EZ-Template also uses. Only the formula
+is used; the code is our own.

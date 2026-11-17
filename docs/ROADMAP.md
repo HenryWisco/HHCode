@@ -2,8 +2,26 @@
 
 JAR-Template runs on the VEX API (`vex.h`). EZ-Template runs on PROS
 (`pros::` API), so its code can't be copied in. Its features get rebuilt here
-on top of JAR's classes. Nothing below is written yet; this list is the plan to
-agree on before coding.
+on top of JAR's classes.
+
+## Status
+
+Written and compiling, **not yet tested on a robot**:
+
+- All configuration in `robot-config.cpp`, with one `drive_type` setting
+- `hh::Subsystem`, `hh::Spinner`, `hh::Positioner`, `hh::Velocity`, `hh::Pneumatic`
+- Button bindings (press, hold, toggle, shift combos) and `hh::when` sensor triggers
+- Driver control: seven stick layouts, joystick curves (with live tuning),
+  active brake, field-centric for mecanum / X-drive, overheat rumble
+- Auton selector on the Brain and controller, saved to SD card
+- Inertial calibration at start-up
+
+Not started:
+
+- Slew, async motions with `wait_until`, motion chaining, interference detection
+- Strafe a distance without odometry; mecanum vs X-drive strafe tuning
+- Live PID tuner, pure pursuit
+- Color sorting helper
 
 ## Design goals (from Henry)
 
@@ -30,13 +48,13 @@ able to tune or replace every piece without fighting the template.
 
 | | Tank | Mecanum | X-drive |
 |---|---|---|---|
-| Driver control | `control_tank`, `control_arcade` ✅ | `control_holonomic` ✅ | `control_holonomic` ✅ |
-| PID drive/turn/swing | ✅ | ✅ | ✅ |
-| Odometry | No trackers, 1 or 2 trackers ✅ | **Only with 2 tracking wheels** | **Only with 2 tracking wheels** |
-| Drive-to-pose with strafing | n/a | ✅ (needs odom) | ✅ (needs odom) |
-| Strafe a distance (no odom) | n/a | ❌ add | ❌ add |
-| Field-centric driver control | n/a | ❌ add | ❌ add |
-| Mecanum vs X tuning differences | n/a | ❌ add (strafe multiplier) | ❌ add |
+| Driver control | `control_tank`, `control_arcade` âœ… | `control_holonomic` âœ… | `control_holonomic` âœ… |
+| PID drive/turn/swing | âœ… | âœ… | âœ… |
+| Odometry | No trackers, 1 or 2 trackers âœ… | **Only with 2 tracking wheels** | **Only with 2 tracking wheels** |
+| Drive-to-pose with strafing | n/a | âœ… (needs odom) | âœ… (needs odom) |
+| Strafe a distance (no odom) | n/a | âŒ add | âŒ add |
+| Field-centric driver control | n/a | âŒ add | âŒ add |
+| Mecanum vs X tuning differences | n/a | âŒ add (strafe multiplier) | âŒ add |
 
 ### Subsystem building blocks (`hh/`)
 

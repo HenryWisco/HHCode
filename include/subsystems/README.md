@@ -1,4 +1,4 @@
 # include/subsystems
 
-One header per mechanism on the robot (intake, lift, clamp, ...). See
+Headers for custom mechanisms that extend `hh::Subsystem`. See
 `src/subsystems/README.md`.

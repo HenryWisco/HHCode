@@ -1,0 +1,213 @@
+#include "vex.h"
+
+namespace hh {
+namespace selector {
+
+bool show_on_brain = true;
+bool use_controller = true;
+
+struct Auton {
+  const char* name;
+  const char* description;
+  void (*routine)();
+};
+
+static const int MAX_AUTONS = 24;
+static Auton autons[MAX_AUTONS];
+static int total = 0;
+static int current = 0;
+
+static const char* SAVE_FILE = "hh_auton.txt";
+
+void add(const char* name, const char* description, void (*routine)()) {
+  if (total < MAX_AUTONS) {
+    autons[total++] = {name, description, routine};
+  }
+}
+
+int selected() { return current; }
+
+int count() { return total; }
+
+const char* selected_name() { return total > 0 ? autons[current].name : "No autons"; }
+
+// The name is saved rather than the number, so reordering the list doesn't
+// silently change which auton runs.
+static void save() {
+  if (total == 0 || !Brain.SDcard.isInserted()) return;
+  const char* name = autons[current].name;
+  Brain.SDcard.savefile(SAVE_FILE, (uint8_t*)name, strlen(name));
+}
+
+static void load() {
+  if (!Brain.SDcard.isInserted() || !Brain.SDcard.exists(SAVE_FILE)) return;
+  char name[64] = {0};
+  Brain.SDcard.loadfile(SAVE_FILE, (uint8_t*)name, sizeof(name) - 1);
+  for (int i = 0; i < total; i++) {
+    if (strcmp(autons[i].name, name) == 0) current = i;
+  }
+}
+
+void next() {
+  if (total == 0) return;
+  current = (current + 1) % total;
+  save();
+}
+
+void previous() {
+  if (total == 0) return;
+  current = (current + total - 1) % total;
+  save();
+}
+
+void run_selected() {
+  if (total == 0) return;
+  autons[current].routine();
+}
+
+// Prints `text` on up to `max_lines` lines, breaking at spaces.
+static void print_wrapped(const char* text, int x, int y, int line_height, int width, int max_lines) {
+  int length = strlen(text);
+  int start = 0;
+  for (int line = 0; line < max_lines && start < length; line++) {
+    int end = start + width;
+    if (end >= length) {
+      end = length;
+    } else {
+      int space = end;
+      while (space > start && text[space] != ' ') space--;
+      if (space > start) end = space;
+    }
+    char buffer[64];
+    int n = end - start;
+    if (n > (int)sizeof(buffer) - 1) n = sizeof(buffer) - 1;
+    memcpy(buffer, text + start, n);
+    buffer[n] = 0;
+    Brain.Screen.printAt(x, y + line * line_height, true, "%s", buffer);
+    start = end;
+    while (start < length && text[start] == ' ') start++;
+  }
+}
+
+static void draw_status() {
+  Brain.Screen.setFont(vex::fontType::mono20);
+  Brain.Screen.setFillColor(vex::color(0x1565C0));
+  Brain.Screen.setPenColor(vex::color::white);
+  Brain.Screen.printAt(250, 22, "Batt %3d%%  Head %5.1f ", (int)Brain.Battery.capacity(),
+                       chassis.get_absolute_heading());
+  Brain.Screen.setFillColor(vex::color::black);
+}
+
+static void draw_screen() {
+  Brain.Screen.clearScreen();
+
+  // Title bar
+  Brain.Screen.setPenColor(vex::color(0x1565C0));
+  Brain.Screen.setFillColor(vex::color(0x1565C0));
+  Brain.Screen.drawRectangle(0, 0, 480, 32);
+  Brain.Screen.setPenColor(vex::color::white);
+  Brain.Screen.setFont(vex::fontType::mono20);
+  Brain.Screen.printAt(10, 22, true, "HHCode  %s", Brain.SDcard.isInserted() ? "SD" : "no SD");
+  draw_status();
+
+  // Chosen auton
+  Brain.Screen.setFillColor(vex::color::black);
+  Brain.Screen.setPenColor(vex::color(0x9E9E9E));
+  if (total == 0) {
+    Brain.Screen.printAt(10, 60, "No autons yet");
+    Brain.Screen.setPenColor(vex::color::white);
+    print_wrapped("Add them in register_autons() in src/autons/auton_list.cpp", 10, 100, 24, 46, 3);
+  } else {
+    Brain.Screen.printAt(10, 60, "Auton %d of %d", current + 1, total);
+    Brain.Screen.setPenColor(vex::color::white);
+    Brain.Screen.setFont(vex::fontType::mono30);
+    Brain.Screen.printAt(10, 98, true, "%s", autons[current].name);
+    Brain.Screen.setFont(vex::fontType::mono20);
+    Brain.Screen.setPenColor(vex::color(0xBDBDBD));
+    print_wrapped(autons[current].description, 10, 128, 22, 46, 2);
+  }
+
+  // Buttons
+  Brain.Screen.setPenColor(vex::color(0x424242));
+  Brain.Screen.setFillColor(vex::color(0x424242));
+  Brain.Screen.drawRectangle(8, 178, 228, 54);
+  Brain.Screen.drawRectangle(244, 178, 228, 54);
+  Brain.Screen.setPenColor(vex::color::white);
+  Brain.Screen.setFont(vex::fontType::mono30);
+  Brain.Screen.printAt(70, 215, "< PREV");
+  Brain.Screen.printAt(306, 215, "NEXT >");
+  Brain.Screen.setFont(vex::fontType::mono20);
+  Brain.Screen.setFillColor(vex::color::black);
+}
+
+static void draw_controller() {
+  Controller.Screen.clearLine(1);
+  Controller.Screen.setCursor(1, 1);
+  if (total == 0) {
+    Controller.Screen.print("No autons");
+  } else {
+    Controller.Screen.print("%d/%d %s", current + 1, total, autons[current].name);
+  }
+}
+
+static int selector_task() {
+  int shown = -1;
+  bool was_running_auton = false;
+  bool was_touching = false;
+  bool was_left = false;
+  bool was_right = false;
+  uint32_t last_status = 0;
+
+  while (true) {
+    bool running_auton = Competition.isEnabled() && Competition.isAutonomous();
+    bool disabled_by_field = !Competition.isEnabled() &&
+                             (Competition.isCompetitionSwitch() || Competition.isFieldControl());
+
+    if (running_auton) {
+      // Leave the screen to the auton so it can print its own information.
+      if (!was_running_auton && show_on_brain) Brain.Screen.clearScreen();
+      was_running_auton = true;
+      shown = -1;
+      vex::task::sleep(50);
+      continue;
+    }
+    was_running_auton = false;
+
+    if (show_on_brain) {
+      bool touching = Brain.Screen.pressing();
+      if (touching && !was_touching) {
+        if (Brain.Screen.xPosition() < 240) previous(); else next();
+      }
+      was_touching = touching;
+    }
+
+    if (use_controller && disabled_by_field) {
+      bool left = Controller.ButtonLeft.pressing();
+      bool right = Controller.ButtonRight.pressing();
+      if (left && !was_left) previous();
+      if (right && !was_right) next();
+      was_left = left;
+      was_right = right;
+    }
+
+    if (shown != current) {
+      shown = current;
+      if (show_on_brain) draw_screen();
+      if (use_controller) draw_controller();
+    } else if (show_on_brain && now_ms() - last_status > 250) {
+      last_status = now_ms();
+      draw_status();
+    }
+
+    vex::task::sleep(20);
+  }
+  return 0;
+}
+
+void start() {
+  load();
+  static vex::task task(selector_task);
+}
+
+}  // namespace selector
+}  // namespace hh
