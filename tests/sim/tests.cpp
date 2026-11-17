@@ -1460,7 +1460,11 @@ int main(int argc, char** argv) {
   for (Test& test : all_tests()) {
     printf("  %s\n", test.name);
     fflush(stdout);
-    std::string command = std::string("\"") + argv[0] + "\" " + test.name;
+    std::string program = argv[0];
+#ifdef _WIN32
+    for (char& c : program) if (c == '/') c = '\\';   // cmd.exe needs backslashes
+#endif
+    std::string command = "\"" + program + "\" " + test.name;
     if (system(command.c_str()) != 0) {
       printf("    ^ FAILED\n");
       failed++;
