@@ -1,0 +1,1086 @@
+// Test scenarios. Each TEST runs in its own process on a freshly booted
+// simulated robot, so they can't affect each other.
+//
+//   sim_tank              runs every test and prints a summary
+//   sim_tank drive_test   runs one test
+#include "robot.h"
+#include <string>
+#include <vector>
+
+#undef main
+int robot_main();   // main() from src/main.cpp, renamed by the build
+
+/*---------------------------------------------------------------------------*/
+/*  A very small test framework                                              */
+/*---------------------------------------------------------------------------*/
+
+struct Test {
+  const char* name;
+  void (*run)();
+};
+
+static std::vector<Test>& all_tests() {
+  static std::vector<Test> list;
+  return list;
+}
+
+struct Registrar {
+  Registrar(const char* name, void (*run)()) { all_tests().push_back({name, run}); }
+};
+
+static int failures = 0;
+
+#define TEST(name)                                  \
+  static void name();                               \
+  static Registrar registrar_##name(#name, name);   \
+  static void name()
+
+#define CHECK(condition)                                                    \
+  do {                                                                      \
+    if (!(condition)) {                                                     \
+      printf("    FAIL line %d: %s\n", __LINE__, #condition);               \
+      failures++;                                                           \
+    }                                                                       \
+  } while (0)
+
+#define CHECK_NEAR(value, expected, tolerance)                              \
+  do {                                                                      \
+    double value_ = (value), expected_ = (expected);                        \
+    if (!(fabs(value_ - expected_) <= (tolerance))) {                       \
+      printf("    FAIL line %d: %s is %.3f, expected %.3f +/- %.3f\n",      \
+             __LINE__, #value, value_, expected_, (double)(tolerance));     \
+      failures++;                                                           \
+    }                                                                       \
+  } while (0)
+
+/*---------------------------------------------------------------------------*/
+/*  Helpers                                                                  */
+/*---------------------------------------------------------------------------*/
+
+using sim::robot;
+
+// Starts the program and waits for the inertial sensor to calibrate.
+static void boot(bool field = false) {
+  sim::boot(field, robot_main);
+  sim::run(3000);
+}
+
+// Starts the program on a competition switch and enables autonomous without
+// running the selected auton, so the test itself can call chassis functions.
+static void boot_for_auton() {
+  boot(true);
+  sim::set_mode(sim::AUTONOMOUS, false);
+}
+
+static void select_auton(const char* name) {
+  for (int i = 0; i < hh::selector::count(); i++) {
+    if (strcmp(hh::selector::selected_name(), name) == 0) return;
+    hh::selector::next();
+  }
+  CHECK(strcmp(hh::selector::selected_name(), name) == 0);
+}
+
+static bool contains(const std::string& text, const char* part) { return text.find(part) != std::string::npos; }
+
+// The robot's true heading as an error from `target`, in -180..180.
+static double heading_off(double target) { return reduce_negative_180_to_180(robot.heading_deg - target); }
+
+static double distance_to(double x, double y) { return hypot(robot.x - x, robot.y - y); }
+
+static double speed() { return hypot(robot.forward_speed, robot.strafe_speed); }
+
+/*---------------------------------------------------------------------------*/
+/*  Every drivetrain                                                         */
+/*---------------------------------------------------------------------------*/
+
+TEST(boot_calibrates_then_shows_selector) {
+  sim::boot(false, robot_main);
+  sim::run(500);
+  CHECK(sim::brain_shows("Calibrating"));
+  sim::run(2500);
+  CHECK(!sim::brain_shows("Calibrating"));
+  CHECK(sim::brain_shows("Drive Test"));
+  CHECK(sim::brain_shows("Auton 1 of 9"));
+  CHECK(contains(sim::controller_line(1), "Drive Test"));
+}
+
+TEST(selector_touch_changes_auton_and_saves) {
+  boot();
+  sim::tap_screen(400, 120);
+  CHECK(strcmp(hh::selector::selected_name(), "Turn Test") == 0);
+  sim::run(100);
+  CHECK(sim::brain_shows("Turn Test"));
+  CHECK(sim::sd_files()["hh_auton.txt"] == "Turn Test");
+  sim::tap_screen(100, 120);
+  sim::tap_screen(100, 120);
+  CHECK(strcmp(hh::selector::selected_name(), "Async Test") == 0);
+}
+
+TEST(selector_restores_choice_from_sd_card) {
+  sim::sd_files()["hh_auton.txt"] = "Full Test";
+  boot();
+  CHECK(strcmp(hh::selector::selected_name(), "Full Test") == 0);
+}
+
+TEST(selector_works_without_sd_card) {
+  sim::sd_inserted = false;
+  boot();
+  sim::tap_screen(400, 120);
+  CHECK(strcmp(hh::selector::selected_name(), "Turn Test") == 0);
+  CHECK(sim::brain_shows("no SD"));
+}
+
+TEST(selector_controller_arrows_only_while_disabled_on_field) {
+  boot(true);
+  sim::tap("Right");
+  CHECK(strcmp(hh::selector::selected_name(), "Turn Test") == 0);
+  CHECK(contains(sim::controller_line(1), "Turn Test"));
+  sim::tap("Left");
+  CHECK(strcmp(hh::selector::selected_name(), "Drive Test") == 0);
+  sim::set_mode(sim::DRIVER);
+  sim::run(100);
+  sim::tap("Right");
+  CHECK(strcmp(hh::selector::selected_name(), "Drive Test") == 0);
+}
+
+TEST(robot_does_not_move_while_disabled) {
+  boot(true);
+  sim::set_axis(3, 100);
+  sim::run(1000);
+  CHECK_NEAR(speed(), 0, 0.01);
+  CHECK_NEAR(distance_to(0, 0), 0, 0.01);
+}
+
+TEST(drive_distance_is_accurate) {
+  boot_for_auton();
+  double start = sim::now();
+  chassis.drive_distance(24);
+  CHECK(sim::now() - start < 3000);
+  CHECK_NEAR(robot.y, 24, 1.5);
+  CHECK_NEAR(robot.x, 0, 1);
+  CHECK_NEAR(heading_off(0), 0, 2);
+  chassis.drive_distance(-24);
+  CHECK_NEAR(robot.y, 0, 1.5);
+}
+
+TEST(turn_to_angle_is_accurate) {
+  boot_for_auton();
+  double start = sim::now();
+  chassis.turn_to_angle(90);
+  CHECK(sim::now() - start < 3000);
+  CHECK_NEAR(heading_off(90), 0, 2);
+  chassis.turn_to_angle(225);
+  CHECK_NEAR(heading_off(225), 0, 2);
+  chassis.turn_to_angle(0);
+  CHECK_NEAR(heading_off(0), 0, 2);
+  CHECK(distance_to(0, 0) < 2);
+}
+
+TEST(drive_test_auton_returns_to_start) {
+  boot(true);
+  select_auton("Drive Test");
+  sim::set_mode(sim::AUTONOMOUS);
+  double farthest = 0;
+  for (int i = 0; i < 600; i++) {
+    sim::run(20);
+    if (robot.y > farthest) farthest = robot.y;
+  }
+  CHECK_NEAR(farthest, 36, 3);
+  CHECK_NEAR(robot.y, 0, 2.5);
+  CHECK_NEAR(heading_off(0), 0, 3);
+}
+
+TEST(full_match_flow) {
+  boot(true);
+  select_auton("Turn Test");
+  sim::set_mode(sim::AUTONOMOUS);
+  sim::run(1500);
+  CHECK(fabs(heading_off(0)) > 3);          // it is turning
+  sim::run(13500);
+  CHECK_NEAR(heading_off(0), 0, 3);
+  sim::set_mode(sim::DISABLED);
+  sim::run(1000);
+  CHECK_NEAR(speed(), 0, 0.5);
+  sim::set_mode(sim::DRIVER);
+  sim::set_axis(3, 100);
+  sim::run(1000);
+  CHECK(robot.forward_speed > 20);
+  sim::set_axis(3, 0);
+  sim::run(1000);
+  double before = robot.heading_deg;
+  sim::set_axis(1, 60);
+  sim::run(500);
+  CHECK(robot.heading_deg - before > 20);   // right stick right turns right
+}
+
+TEST(async_returns_at_once_and_wait_until_works) {
+  boot_for_auton();
+  double start = sim::now();
+  chassis.async().drive_distance(36);
+  CHECK(sim::now() - start < 1);
+  CHECK(chassis.is_moving());
+  chassis.wait_until(12);
+  CHECK(robot.y >= 11.5 && robot.y < 16);
+  CHECK(chassis.is_moving());
+  chassis.wait();
+  CHECK(!chassis.is_moving());
+  CHECK_NEAR(robot.y, 36, 1.5);
+}
+
+TEST(wait_until_measures_degrees_for_turns) {
+  boot_for_auton();
+  chassis.async().turn_to_angle(120);
+  chassis.wait_until(45);
+  CHECK(robot.heading_deg >= 44 && robot.heading_deg < 70);
+  chassis.wait();
+  CHECK_NEAR(heading_off(120), 0, 2);
+}
+
+TEST(async_test_auton_runs) {
+  boot_for_auton();
+  async_test();
+  CHECK(sim::brain_shows("Passed 12 inches"));
+  CHECK(distance_to(0, 0) < 5);
+  CHECK_NEAR(heading_off(0), 0, 3);
+}
+
+TEST(new_motion_replaces_background_motion) {
+  boot_for_auton();
+  chassis.async().drive_distance(60);
+  sim::run(300);
+  chassis.turn_to_angle(90);
+  CHECK(!chassis.is_moving());
+  CHECK_NEAR(heading_off(90), 0, 3);
+  sim::run(300);
+  CHECK(speed() < 2);
+}
+
+TEST(cancel_motion_stops_the_robot) {
+  boot_for_auton();
+  chassis.async().drive_distance(60);
+  sim::run(400);
+  CHECK(robot.forward_speed > 10);
+  chassis.cancel_motion();
+  CHECK(!chassis.is_moving());
+  sim::run(400);
+  CHECK(speed() < 1);
+}
+
+TEST(chain_exits_early_and_still_moving) {
+  boot_for_auton();
+  double start = sim::now();
+  chassis.drive_distance(24);
+  double settled_time = sim::now() - start;
+  CHECK(speed() < 2);
+
+  double from = robot.y;
+  start = sim::now();
+  chassis.chain().drive_distance(24);
+  double chained_time = sim::now() - start;
+  CHECK(chained_time < settled_time - 150);
+  CHECK(robot.forward_speed > 3);
+  CHECK(robot.y - from > 20 && robot.y - from < 24.5);
+
+  // chain() only applies to one motion: the next one settles normally.
+  chassis.drive_distance(6);
+  CHECK(speed() < 2);
+}
+
+TEST(slew_ramps_the_voltage) {
+  boot_for_auton();
+  chassis.drive_slew = 30;   // volts per second
+  chassis.async().drive_distance(48);
+  sim::run(105);
+  CHECK(chassis.DriveR.voltage(volt) > 2 && chassis.DriveR.voltage(volt) < 3.8);
+  sim::run(100);
+  CHECK(chassis.DriveR.voltage(volt) > 5 && chassis.DriveR.voltage(volt) < 6.8);
+  chassis.wait();
+  CHECK_NEAR(robot.y, 48, 1.5);
+
+  chassis.drive_slew = 0;
+  chassis.async().drive_distance(-48);
+  sim::run(25);
+  CHECK(chassis.DriveR.voltage(volt) < -9);   // no slew: full power at once
+  chassis.wait();
+}
+
+TEST(stall_detection_gives_up_when_blocked) {
+  boot_for_auton();
+  chassis.stall_time = 300;
+  robot.blocked = true;
+  double start = sim::now();
+  chassis.drive_distance(24);
+  CHECK(sim::now() - start < 800);
+  CHECK(chassis.interfered);
+
+  robot.blocked = false;
+  chassis.drive_distance(12);
+  CHECK(!chassis.interfered);
+  CHECK_NEAR(robot.y, 12, 1.5);
+  chassis.turn_to_angle(90);
+  CHECK(!chassis.interfered);
+  CHECK_NEAR(heading_off(90), 0, 2);
+}
+
+TEST(without_stall_detection_a_blocked_drive_times_out) {
+  boot_for_auton();
+  robot.blocked = true;
+  double start = sim::now();
+  chassis.drive_distance(24);
+  CHECK_NEAR(sim::now() - start, 5000, 100);
+  CHECK(!chassis.interfered);
+}
+
+static void leftover_auton() { chassis.async().drive_distance(200); }
+
+TEST(background_motion_is_cancelled_when_driver_control_starts) {
+  boot(true);
+  hh::selector::add("Leftover", "Leaves a background motion running", leftover_auton);
+  select_auton("Leftover");
+  sim::set_mode(sim::AUTONOMOUS);
+  sim::run(700);
+  CHECK(robot.forward_speed > 20);
+  sim::set_mode(sim::DISABLED);
+  sim::run(300);
+  sim::set_mode(sim::DRIVER);
+  sim::run(700);
+  CHECK(!chassis.is_moving());
+  CHECK(speed() < 1);
+}
+
+TEST(joystick_curve_shape) {
+  boot();
+  CHECK_NEAR(hh::driver::curve(100, 5), 100, 0.01);
+  CHECK_NEAR(hh::driver::curve(-100, 5), -100, 0.01);
+  CHECK_NEAR(hh::driver::curve(0, 5), 0, 0.01);
+  CHECK_NEAR(hh::driver::curve(50, 0), 50, 0.01);
+  CHECK(hh::driver::curve(50, 5) < 45 && hh::driver::curve(50, 5) > 20);
+  CHECK_NEAR(hh::driver::curve(-50, 5), -hh::driver::curve(50, 5), 0.01);
+}
+
+TEST(tuner_adjusts_runs_and_stops) {
+  boot();
+  hh::tuner::enabled = true;
+  sim::run(100);
+  CHECK(contains(sim::controller_line(1), "Drive kP"));
+  CHECK(contains(sim::controller_line(2), "1.500"));
+  sim::tap("Right");
+  CHECK_NEAR(chassis.drive_kp, 1.55, 0.001);
+  CHECK(contains(sim::controller_line(2), "1.550"));
+  sim::tap("Left");
+  CHECK_NEAR(chassis.drive_kp, 1.5, 0.001);
+  sim::tap("Down");
+  CHECK(contains(sim::controller_line(1), "Drive kI"));
+  sim::tap("Up");
+  sim::tap("Up");
+  CHECK(contains(sim::controller_line(1), "Turn slew"));
+
+  sim::tap("A");                       // runs Drive Test
+  sim::run(500);
+  CHECK(speed() > 5);
+  CHECK(contains(sim::controller_line(3), "RUNNING"));
+  sim::set_axis(3, -100);              // sticks are ignored during a run
+  sim::run(200);
+  CHECK(robot.forward_speed > 0);
+  sim::set_axis(3, 0);
+  sim::tap("B");
+  sim::run(600);
+  CHECK(speed() < 1);
+  CHECK(contains(sim::controller_line(3), "A:run"));
+
+  double from = robot.y;
+  sim::tap("A");                       // this time let it finish
+  sim::run(12000);
+  CHECK_NEAR(robot.y, from, 2.5);
+  CHECK(contains(sim::controller_line(3), "A:run"));
+
+  sim::set_axis(3, 100);               // and the sticks drive again
+  sim::run(500);
+  CHECK(robot.forward_speed > 20);
+}
+
+#if SIM_CONFIG == 1 || SIM_CONFIG == 2
+/*---------------------------------------------------------------------------*/
+/*  Tank drive                                                               */
+/*---------------------------------------------------------------------------*/
+
+TEST(swing_turns) {
+  boot_for_auton();
+  chassis.left_swing_to_angle(90);
+  CHECK_NEAR(heading_off(90), 0, 3);
+  chassis.right_swing_to_angle(0);
+  CHECK_NEAR(heading_off(0), 0, 3);
+  CHECK(distance_to(0, 0) > 4);   // an S shape ends somewhere else
+}
+
+TEST(full_test_auton_ends_near_start) {
+  boot_for_auton();
+  full_test();
+  CHECK(distance_to(0, 0) < 14);
+  CHECK_NEAR(heading_off(0), 0, 3);
+}
+
+TEST(split_arcade_sticks) {
+  boot();
+  sim::set_axis(3, 50);
+  sim::run(100);
+  CHECK_NEAR(chassis.DriveL.voltage(volt), 6, 0.1);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), 6, 0.1);
+  sim::run(900);
+  CHECK(robot.forward_speed > 10);
+  CHECK_NEAR(heading_off(0), 0, 1);
+  sim::set_axis(1, 50);
+  sim::run(100);
+  CHECK_NEAR(chassis.DriveL.voltage(volt), 12, 0.1);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), 0, 0.1);
+  // Full forward and full turn: scaled so neither side passes 12 volts.
+  sim::set_axis(3, 100);
+  sim::set_axis(1, 100);
+  sim::run(100);
+  CHECK_NEAR(chassis.DriveL.voltage(volt), 12, 0.1);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), 0, 0.1);
+}
+
+TEST(tank_sticks_and_deadband) {
+  boot();
+  hh::driver::style = hh::TANK_STICKS;
+  sim::set_axis(3, 80);
+  sim::set_axis(2, -40);
+  sim::run(100);
+  CHECK_NEAR(chassis.DriveL.voltage(volt), 9.6, 0.1);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), -4.8, 0.1);
+  sim::set_axis(3, 4);
+  sim::set_axis(2, -4);
+  sim::run(100);
+  CHECK_NEAR(chassis.DriveL.voltage(volt), 0, 0.01);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), 0, 0.01);
+}
+
+TEST(other_arcade_styles) {
+  boot();
+  hh::driver::style = hh::LEFT_ARCADE;
+  sim::set_axis(3, 50);
+  sim::set_axis(4, 25);
+  sim::run(100);
+  CHECK_NEAR(chassis.DriveL.voltage(volt), 9, 0.1);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), 3, 0.1);
+  sim::set_axis(3, 0);
+  sim::set_axis(4, 0);
+  hh::driver::style = hh::RIGHT_ARCADE;
+  sim::set_axis(2, 50);
+  sim::set_axis(1, -25);
+  sim::run(100);
+  CHECK_NEAR(chassis.DriveL.voltage(volt), 3, 0.1);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), 9, 0.1);
+  sim::set_axis(1, 0);
+  hh::driver::style = hh::FLIPPED_ARCADE;
+  sim::set_axis(4, 25);
+  sim::run(100);
+  CHECK_NEAR(chassis.DriveL.voltage(volt), 9, 0.1);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), 3, 0.1);
+  hh::driver::turn_scale = 0.5;
+  sim::run(100);
+  CHECK_NEAR(chassis.DriveL.voltage(volt), 7.5, 0.1);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), 4.5, 0.1);
+}
+
+TEST(active_brake_pushes_back) {
+  boot();
+  hh::driver::active_brake_kp = 0.1;
+  sim::run(100);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), 0, 0.1);
+  sim::motor(PORT3).position_deg += 60;   // someone shoves the right side forward
+  sim::run(25);
+  CHECK(chassis.DriveR.voltage(volt) < -3);
+  CHECK(fabs(chassis.DriveL.voltage(volt)) < 1);
+  sim::run(1500);                         // and it works its way back
+  CHECK(fabs(chassis.DriveR.voltage(volt)) < 1.5);
+  sim::set_axis(3, 50);                   // the sticks still win
+  sim::run(100);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), 6, 0.1);
+}
+#endif
+
+#if SIM_CONFIG == 1
+/*---------------------------------------------------------------------------*/
+/*  Mechanism blocks and buttons                                             */
+/*---------------------------------------------------------------------------*/
+
+TEST(intake_hold_buttons) {
+  boot();
+  sim::set_button("R1", true);
+  sim::run(100);
+  CHECK(intake.is_spinning());
+  CHECK_NEAR(sim::motor(INTAKE_PORT).volts, 12, 0.01);
+  sim::run(500);
+  CHECK(sim::motor(INTAKE_PORT).velocity_dps > 2000);
+  sim::set_button("R1", false);
+  sim::run(100);
+  CHECK(!intake.is_spinning());
+  CHECK(sim::motor(INTAKE_PORT).command == sim::MotorState::STOPPED);
+  sim::set_button("R2", true);
+  sim::run(100);
+  CHECK_NEAR(sim::motor(INTAKE_PORT).volts, -12, 0.01);
+  sim::set_button("R2", false);
+  sim::run(100);
+  CHECK(!intake.is_spinning());
+}
+
+TEST(intake_speed_and_auton_commands) {
+  boot_for_auton();
+  intake.spin(60);
+  CHECK_NEAR(sim::motor(INTAKE_PORT).volts, 7.2, 0.01);
+  intake.speed = 50;
+  intake.reverse();
+  CHECK_NEAR(sim::motor(INTAKE_PORT).volts, -6, 0.01);
+  CHECK_NEAR(intake.commanded(), -50, 0.01);
+  intake.velocity_mode = true;
+  intake.spin();
+  CHECK(sim::motor(INTAKE_PORT).command == sim::MotorState::VELOCITY);
+  CHECK_NEAR(sim::motor(INTAKE_PORT).velocity_pct, 50, 0.01);
+  intake.stop();
+  CHECK(sim::motor(INTAKE_PORT).command == sim::MotorState::STOPPED);
+}
+
+TEST(shift_key_combo) {
+  boot();
+  sim::set_button("L2", true);
+  sim::run(60);
+  sim::set_button("R1", true);
+  sim::run(100);
+  CHECK(wing.is_extended());
+  CHECK(sim::digital(1));
+  CHECK(!intake.is_spinning());       // plain R1 doesn't fire while L2 is held
+  sim::set_button("R1", false);
+  sim::run(100);
+  CHECK(!wing.is_extended());
+  sim::set_button("L2", false);
+  sim::run(60);
+  sim::set_button("R1", true);
+  sim::run(100);
+  CHECK(intake.is_spinning());
+  CHECK(!wing.is_extended());
+}
+
+TEST(piston_toggle_pulse_and_reversed) {
+  boot();
+  CHECK(!sim::digital(0));
+  sim::tap("A");
+  CHECK(sim::digital(0));
+  sim::tap("A");
+  CHECK(!sim::digital(0));
+  mogo_clamp.pulse(200);
+  CHECK(sim::digital(0));
+  sim::run(150);
+  CHECK(sim::digital(0));
+  sim::run(100);
+  CHECK(!sim::digital(0));
+  mogo_clamp.reversed = true;
+  mogo_clamp.extend();
+  CHECK(mogo_clamp.is_extended());
+  CHECK(!sim::digital(0));
+  mogo_clamp.retract();
+  CHECK(sim::digital(0));
+}
+
+TEST(on_press_toggle_and_when) {
+  boot();
+  sim::tap("B");
+  sim::tap("B");
+  sim::set_button("B", true);
+  sim::run(500);                // holding counts once
+  sim::set_button("B", false);
+  sim::run(60);
+  CHECK(b_presses == 3);
+  sim::tap("Y");
+  CHECK(y_state == 1);
+  sim::tap("Y");
+  CHECK(y_state == 2);
+
+  when_flag = true;
+  sim::run(100);
+  CHECK(when_fires == 1);       // once per false -> true
+  when_flag = false;
+  sim::run(50);
+  when_flag = true;
+  sim::run(50);
+  CHECK(when_fires == 2);
+}
+
+TEST(jam_protection_backs_out_and_resumes) {
+  boot_for_auton();
+  intake.jam_protection = true;
+  intake.spin();
+  sim::run(600);
+  CHECK(intake.jam_count() == 0);       // spinning up is not a jam
+  sim::motor(INTAKE_PORT).jammed = true;
+  sim::run(350);
+  CHECK(intake.is_unjamming());
+  CHECK_NEAR(sim::motor(INTAKE_PORT).volts, -12, 0.01);
+  sim::motor(INTAKE_PORT).jammed = false;
+  sim::run(300);
+  CHECK(!intake.is_unjamming());
+  CHECK_NEAR(sim::motor(INTAKE_PORT).volts, 12, 0.01);
+  CHECK(intake.jam_count() == 1);
+  sim::run(1000);
+  CHECK(intake.jam_count() == 1);
+}
+
+TEST(mechanisms_forget_commands_when_disabled) {
+  boot_for_auton();
+  intake.spin();
+  flywheel.set_rpm(2400);
+  sim::run(500);
+  sim::set_mode(sim::DISABLED);
+  sim::run(500);
+  CHECK(!intake.is_spinning());
+  CHECK(!flywheel.is_spinning());
+  sim::set_mode(sim::AUTONOMOUS, false);
+  sim::run(1000);
+  CHECK(sim::motor(INTAKE_PORT).command == sim::MotorState::STOPPED);
+  CHECK(fabs(sim::motor(FLYWHEEL_PORT).velocity_dps) < 50);
+}
+
+TEST(intake_stops_when_driver_control_starts) {
+  boot(true);
+  sim::set_mode(sim::DRIVER);
+  sim::run(100);
+  intake.spin();
+  sim::set_mode(sim::DISABLED);
+  sim::run(400);
+  sim::set_mode(sim::DRIVER);
+  sim::run(100);
+  CHECK(!intake.is_spinning());
+}
+
+TEST(lift_presets_from_buttons) {
+  boot();
+  sim::tap("Up");
+  sim::run(2500);
+  CHECK_NEAR(lift.position(), 110, 2.5);
+  CHECK(lift.is_settled());
+  sim::tap("Down");
+  sim::run(300);
+  CHECK(!lift.is_settled());
+  sim::run(2200);
+  CHECK_NEAR(lift.position(), 0, 2.5);
+}
+
+TEST(lift_go_to_returns_at_once_and_wait_blocks) {
+  boot_for_auton();
+  double start = sim::now();
+  lift.go_to(60);
+  CHECK(sim::now() - start < 1);
+  lift.wait();
+  CHECK(sim::now() - start > 300 && sim::now() - start < 2500);
+  CHECK_NEAR(lift.position(), 60, 2.5);
+  lift.go_to("high");
+  CHECK_NEAR(lift.target(), 110, 0.01);
+  lift.go_to("no such preset");        // prints a message, keeps the old target
+  CHECK_NEAR(lift.target(), 110, 0.01);
+}
+
+TEST(lift_soft_limits) {
+  boot_for_auton();
+  lift.set_limits(0, 90);
+  lift.go_to(200);
+  CHECK_NEAR(lift.target(), 90, 0.01);
+  lift.move(12);                       // manual drive stops at the limit too
+  sim::run(3000);
+  CHECK(lift.position() < 95);
+  lift.move(-12);
+  sim::run(3000);
+  CHECK(lift.position() > -5);
+}
+
+TEST(lift_manual_then_holds) {
+  boot();
+  sim::set_button("L1", true);
+  sim::run(400);
+  CHECK(lift.position() > 10);
+  sim::set_button("L1", false);
+  sim::run(60);
+  double held = lift.target();
+  sim::run(800);
+  CHECK_NEAR(lift.position(), held, 3);
+  sim::set_button("Left", true);
+  sim::run(300);
+  CHECK(lift.position() < held - 5);
+}
+
+TEST(lift_gravity_feedforward) {
+  boot_for_auton();
+  sim::motor(LIFT_PORT).load_volts = 2;    // a heavy lift
+  lift.go_to(60);
+  sim::run(3000);
+  CHECK(60 - lift.position() > 2);         // sags without kg
+  lift.kg = 2;
+  sim::run(2000);
+  CHECK_NEAR(lift.position(), 60, 2);
+}
+
+TEST(lift_zero_keeps_it_still) {
+  boot_for_auton();
+  lift.go_to(50);
+  sim::run(2000);
+  lift.zero();
+  CHECK_NEAR(lift.position(), 0, 0.01);
+  sim::run(1000);
+  CHECK_NEAR(lift.position(), 0, 2.5);
+}
+
+TEST(flywheel_reaches_speed) {
+  boot_for_auton();
+  CHECK(!flywheel.ready());
+  flywheel.set_rpm(2400);
+  sim::run(100);
+  CHECK(!flywheel.ready());
+  double start = sim::now();
+  flywheel.wait_until_ready();
+  CHECK(sim::now() - start < 2000);
+  CHECK(flywheel.ready());
+  CHECK_NEAR(flywheel.rpm(), 2400, 108);
+  flywheel.stop();
+  CHECK(!flywheel.ready());
+  sim::run(3000);
+  CHECK(fabs(flywheel.rpm()) < 50);
+}
+
+TEST(flywheel_toggle_button) {
+  boot();
+  sim::tap("X");
+  CHECK_NEAR(flywheel.target_rpm(), 2400, 0.01);
+  sim::run(1500);
+  CHECK(flywheel.ready());
+  sim::tap("X");
+  CHECK(!flywheel.is_spinning());
+}
+
+TEST(overheat_warning) {
+  boot();
+  CHECK(sim::rumbles() == 0);
+  sim::motor(INTAKE_PORT).temperature = 60;
+  sim::run(1500);
+  CHECK(sim::rumbles() == 1);
+  CHECK(contains(sim::controller_line(3), "HOT"));
+  CHECK(contains(sim::controller_line(3), "Spinner"));
+  sim::run(5000);
+  CHECK(sim::rumbles() == 1);          // doesn't nag every second
+}
+
+TEST(tuner_pauses_button_bindings) {
+  boot();
+  hh::tuner::enabled = true;
+  sim::set_button("R1", true);
+  sim::run(200);
+  CHECK(!intake.is_spinning());
+}
+#endif
+
+#if SIM_CONFIG == 2
+/*---------------------------------------------------------------------------*/
+/*  Tank odometry and path following                                         */
+/*---------------------------------------------------------------------------*/
+
+static void start_odom() {
+  boot_for_auton();
+  odom_constants();
+  chassis.set_coordinates(0, 0, 0);
+  sim::run(50);
+}
+
+TEST(odometry_tracks_the_true_position) {
+  start_odom();
+  chassis.drive_distance(24);
+  chassis.turn_to_angle(90);
+  chassis.drive_distance(12);
+  chassis.turn_to_angle(200);
+  chassis.drive_distance(-10);
+  CHECK_NEAR(chassis.get_X_position(), robot.x, 0.5);
+  CHECK_NEAR(chassis.get_Y_position(), robot.y, 0.5);
+}
+
+TEST(tank_odom_test_auton_returns_to_start) {
+  boot_for_auton();
+  tank_odom_test();
+  CHECK(distance_to(0, 0) < 4);
+  CHECK_NEAR(heading_off(0), 0, 3);
+}
+
+TEST(turn_and_drive_to_point) {
+  start_odom();
+  chassis.turn_to_point(24, 24);
+  CHECK_NEAR(heading_off(45), 0, 3);
+  chassis.drive_to_point(24, 24);
+  CHECK(distance_to(24, 24) < 3.5);
+  chassis.drive_to_point(0, 0);         // backs up to get there
+  CHECK(distance_to(0, 0) < 3.5);
+}
+
+TEST(drive_to_pose_arrives_facing_the_right_way) {
+  start_odom();
+  chassis.drive_to_pose(24, 24, 90);
+  CHECK(distance_to(24, 24) < 5);
+  CHECK_NEAR(heading_off(90), 0, 20);
+}
+
+// Distance from the robot to the nearest point on a path.
+static double distance_to_path(const std::vector<path_point>& path) {
+  double best = 1e9;
+  for (size_t i = 0; i + 1 < path.size(); i++) {
+    double dx = path[i + 1].x - path[i].x, dy = path[i + 1].y - path[i].y;
+    double length_squared = dx * dx + dy * dy;
+    double t = length_squared == 0 ? 0 : ((robot.x - path[i].x) * dx + (robot.y - path[i].y) * dy) / length_squared;
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    double d = hypot(robot.x - (path[i].x + t * dx), robot.y - (path[i].y + t * dy));
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+TEST(follow_path_through_a_curve) {
+  start_odom();
+  std::vector<path_point> path = {{0, 0}, {0, 24}, {24, 48}, {48, 48}};
+  double start = sim::now();
+  chassis.async().follow_path({{0, 24}, {24, 48}, {48, 48}});
+  double worst = 0;
+  double slowest_midway = 1e9;
+  while (chassis.is_moving() && sim::now() - start < 15000) {
+    sim::run(20);
+    double off = distance_to_path(path);
+    if (off > worst) worst = off;
+    if (robot.y > 10 && robot.x < 40 && speed() < slowest_midway) slowest_midway = speed();
+  }
+  CHECK(sim::now() - start < 8000);
+  CHECK(distance_to(48, 48) < 4);
+  CHECK(worst < 8);                     // corners are rounded, but not by much
+  CHECK(slowest_midway > 5);            // it never stops at a waypoint
+  CHECK_NEAR(heading_off(90), 0, 25);
+}
+
+TEST(follow_path_with_points_closer_than_lookahead) {
+  start_odom();
+  std::vector<path_point> points;
+  for (int y = 4; y <= 48; y += 4) points.push_back({0, (float)y});
+  double start = sim::now();
+  chassis.follow_path(points, 12);
+  CHECK(sim::now() - start < 5000);
+  CHECK(distance_to(0, 48) < 4);
+}
+
+TEST(follow_path_backwards) {
+  start_odom();
+  double farthest_forward = 0;
+  chassis.async().follow_path({{0, -24}, {-24, -48}}, 10, true);
+  double start = sim::now();
+  while (chassis.is_moving() && sim::now() - start < 15000) {
+    sim::run(20);
+    if (robot.y > farthest_forward) farthest_forward = robot.y;
+  }
+  CHECK(sim::now() - start < 8000);
+  CHECK(distance_to(-24, -48) < 4);
+  CHECK(farthest_forward < 2);
+  CHECK_NEAR(heading_off(45), 0, 30);   // still facing away from where it went
+}
+
+TEST(follow_path_wait_until_counts_inches) {
+  start_odom();
+  chassis.async().follow_path({{0, 24}, {24, 48}, {48, 48}});
+  chassis.wait_until(20);
+  CHECK(chassis.is_moving());
+  CHECK(distance_to(0, 0) >= 19.5 && distance_to(0, 0) < 26);
+  chassis.wait();
+}
+
+TEST(follow_path_single_point_and_empty_path) {
+  start_odom();
+  chassis.follow_path({{0, 20}});
+  CHECK(distance_to(0, 20) < 4);
+  chassis.async().follow_path({});      // nothing to do, and must not leave async() armed
+  CHECK(!chassis.is_moving());
+  chassis.drive_distance(6);
+  CHECK(!chassis.is_moving());
+  CHECK(speed() < 2);
+}
+
+TEST(chained_point_to_point) {
+  start_odom();
+  chassis.chain().drive_to_point(0, 24);
+  CHECK(speed() > 3);
+  chassis.drive_to_point(24, 36);
+  CHECK(distance_to(24, 36) < 3.5);
+}
+#endif
+
+#if SIM_CONFIG == 3 || SIM_CONFIG == 4
+/*---------------------------------------------------------------------------*/
+/*  Mecanum and X-drive                                                      */
+/*---------------------------------------------------------------------------*/
+
+TEST(strafe_distance_is_accurate) {
+  boot_for_auton();
+  chassis.strafe_distance(24);
+  CHECK_NEAR(robot.x, 24, 1.5);
+  CHECK_NEAR(robot.y, 0, 1.5);
+  CHECK_NEAR(heading_off(0), 0, 2);
+  chassis.strafe_distance(-24);
+  CHECK_NEAR(robot.x, 0, 1.5);
+}
+
+TEST(strafe_test_auton_returns_to_start) {
+  boot_for_auton();
+  strafe_test();
+  CHECK(distance_to(0, 0) < 2.5);
+}
+
+TEST(strafe_holds_the_heading_asked_for) {
+  boot_for_auton();
+  chassis.strafe_distance(24, 30);
+  CHECK_NEAR(heading_off(30), 0, 4);
+}
+
+TEST(strafe_async_wait_until) {
+  boot_for_auton();
+  chassis.async().strafe_distance(24);
+  chassis.wait_until(10);
+  CHECK(chassis.is_moving());
+  CHECK(robot.x >= 9.5 && robot.x < 15);
+  chassis.wait();
+  CHECK_NEAR(robot.x, 24, 1.5);
+}
+
+TEST(strafe_stall_detection) {
+  boot_for_auton();
+  chassis.stall_time = 300;
+  chassis.strafe_distance(24);          // moving freely is not a stall
+  CHECK(!chassis.interfered);
+  CHECK_NEAR(robot.x, 24, 1.5);
+  robot.blocked = true;
+  double start = sim::now();
+  chassis.strafe_distance(24);
+  CHECK(sim::now() - start < 800);
+  CHECK(chassis.interfered);
+}
+
+TEST(encoder_odometry_tracks_the_true_position) {
+  boot_for_auton();
+  chassis.set_coordinates(0, 0, 0);
+  sim::run(50);
+  chassis.drive_distance(20);
+  chassis.strafe_distance(15);
+  chassis.turn_to_angle(90);
+  chassis.strafe_distance(-10);
+  chassis.drive_distance(-8);
+  CHECK_NEAR(chassis.get_X_position(), robot.x, 0.75);
+  CHECK_NEAR(chassis.get_Y_position(), robot.y, 0.75);
+}
+
+TEST(holonomic_odom_test_auton_returns_to_start) {
+  boot_for_auton();
+  holonomic_odom_test();
+  CHECK(distance_to(0, 0) < 4);
+  CHECK_NEAR(heading_off(0), 0, 5);
+  CHECK_NEAR(chassis.get_X_position(), robot.x, 1.5);
+  CHECK_NEAR(chassis.get_Y_position(), robot.y, 1.5);
+}
+
+TEST(holonomic_sticks) {
+  boot();
+  sim::set_axis(4, 100);                // left stick right: strafe right
+  sim::run(800);
+  CHECK(robot.strafe_speed > 15);
+  CHECK(fabs(robot.forward_speed) < 2);
+  CHECK_NEAR(heading_off(0), 0, 2);
+  sim::set_axis(4, 0);
+  sim::set_axis(3, 100);                // left stick up: forward
+  sim::run(800);
+  CHECK(robot.forward_speed > 15);
+  CHECK(fabs(robot.strafe_speed) < 2);
+  sim::set_axis(3, 0);
+  sim::run(800);
+  double before = robot.heading_deg;
+  sim::set_axis(1, 50);                 // right stick right: turn right
+  sim::run(400);
+  CHECK(robot.heading_deg - before > 15);
+}
+
+TEST(field_centric_sticks) {
+  boot();
+  hh::driver::style = hh::FIELD_CENTRIC;
+  sim::set_axis(1, 50);                 // turn to face roughly right
+  while (robot.heading_deg < 90) sim::run(20);
+  sim::set_axis(1, 0);
+  sim::run(800);
+  double x = robot.x, y = robot.y;
+  sim::set_axis(3, 100);                // stick up still means away from the driver
+  sim::run(800);
+  CHECK(robot.y - y > 8);
+  CHECK(fabs(robot.x - x) < (robot.y - y) * 0.25);
+  sim::set_axis(3, 0);
+  sim::run(800);
+
+  hh::driver::reset_field_centric();    // now "away" is wherever the robot points
+  x = robot.x;
+  y = robot.y;
+  double facing = robot.heading_deg * 3.14159265 / 180.0;
+  sim::set_axis(3, 100);
+  sim::run(800);
+  double along = (robot.x - x) * sin(facing) + (robot.y - y) * cos(facing);
+  CHECK(along > 8);
+  CHECK_NEAR(hypot(robot.x - x, robot.y - y), along, 1.5);
+}
+#endif
+
+#if SIM_CONFIG == 3
+TEST(strafe_multiplier_corrects_wheel_slip) {
+  boot_for_auton();
+  robot.strafe_efficiency = 0.85;       // mecanum rollers slip sideways
+  chassis.strafe_distance(24);
+  CHECK_NEAR(robot.x, 24 * 0.85, 1.5);  // comes up short...
+  chassis.strafe_multiplier = 0.85;
+  double from = robot.x;
+  chassis.strafe_distance(24);
+  CHECK_NEAR(robot.x - from, 24, 1.5);  // ...until the multiplier is set
+}
+#endif
+
+#if SIM_CONFIG == 4
+TEST(x_drive_distances_allow_for_the_45_degree_wheels) {
+  boot_for_auton();
+  chassis.drive_distance(24);
+  CHECK_NEAR(robot.y, 24, 1.5);
+  // The motors turned 24 / sqrt(2) inches worth, not 24.
+  double wheel_inches = chassis.DriveLF.position(deg) * 3.14159265 * 3.25 * 0.5 / 360.0;
+  CHECK_NEAR(wheel_inches, 24 / sqrt(2.0), 1.5);
+}
+#endif
+
+/*---------------------------------------------------------------------------*/
+/*  Runner                                                                   */
+/*---------------------------------------------------------------------------*/
+
+int main(int argc, char** argv) {
+  if (argc >= 2) {
+    for (Test& test : all_tests()) {
+      if (strcmp(test.name, argv[1]) != 0) continue;
+      describe_robot();
+      test.run();
+      sim::finish(failures == 0 ? 0 : 1);
+    }
+    printf("No test called %s\n", argv[1]);
+    return 2;
+  }
+
+  int failed = 0;
+  for (Test& test : all_tests()) {
+    printf("  %s\n", test.name);
+    fflush(stdout);
+    std::string command = std::string("\"") + argv[0] + "\" " + test.name;
+    if (system(command.c_str()) != 0) {
+      printf("    ^ FAILED\n");
+      failed++;
+    }
+  }
+  printf("\n%d of %d tests passed (SIM_CONFIG %d)\n", (int)all_tests().size() - failed, (int)all_tests().size(), SIM_CONFIG);
+  return failed == 0 ? 0 : 1;
+}
