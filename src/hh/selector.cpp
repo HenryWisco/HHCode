@@ -10,6 +10,7 @@ struct Auton {
   const char* name;
   const char* description;
   void (*routine)();
+  bool mirrored;
 };
 
 static const int MAX_AUTONS = 24;
@@ -21,9 +22,18 @@ static const char* SAVE_FILE = "hh_auton.txt";
 
 void add(const char* name, const char* description, void (*routine)()) {
   if (total < MAX_AUTONS) {
-    autons[total++] = {name, description, routine};
+    autons[total++] = {name, description, routine, false};
   }
 }
+
+void add_mirrored(const char* name, const char* mirrored_name, const char* description, void (*routine)()) {
+  add(name, description, routine);
+  if (total < MAX_AUTONS) {
+    autons[total++] = {mirrored_name, description, routine, true};
+  }
+}
+
+bool mirrored() { return chassis.is_mirrored(); }
 
 int selected() { return current; }
 
@@ -62,12 +72,14 @@ void previous() {
 
 void run_selected() {
   if (total == 0) return;
+  chassis.set_mirrored(autons[current].mirrored);
   autons[current].routine();
   // Motions leave the last bit of PID power on the motors so the next one can
   // take over smoothly. After the final one, that would make the robot creep
   // for the rest of autonomous, so stop the drive here.
   chassis.wait();
   chassis.drive_stop(vex::brakeType::brake);
+  chassis.set_mirrored(false);
 }
 
 // Prints `text` on up to `max_lines` lines, breaking at spaces.

@@ -80,6 +80,8 @@ int SidewaysTracker_port, float SidewaysTracker_diameter, float SidewaysTracker_
  */
 
 void Drive::drive_with_voltage(float leftVoltage, float rightVoltage){
+  // HHCode: a mirrored auton swaps the two sides.
+  if (mirrored) { float swap = leftVoltage; leftVoltage = rightVoltage; rightVoltage = swap; }
   DriveL.spin(fwd, leftVoltage, volt);
   DriveR.spin(fwd, rightVoltage,volt);
 }
@@ -219,7 +221,7 @@ void Drive::set_swing_exit_conditions(float swing_settle_error, float swing_sett
  */
 
 float Drive::get_absolute_heading(){ 
-  return( reduce_0_to_360( Gyro.rotation()*360.0/gyro_scale ) ); 
+  return( reduce_0_to_360( get_rotation() ) ); 
 }
 
 /**
@@ -235,7 +237,7 @@ static float x_drive_factor(){
 }
 
 float Drive::get_left_position_in(){
-  return( DriveL.position(deg)*drive_in_to_deg_ratio*x_drive_factor() );
+  return( (mirrored ? DriveR : DriveL).position(deg)*drive_in_to_deg_ratio*x_drive_factor() );
 }
 
 /**
@@ -245,7 +247,7 @@ float Drive::get_left_position_in(){
  */
 
 float Drive::get_right_position_in(){
-  return( DriveR.position(deg)*drive_in_to_deg_ratio*x_drive_factor() );
+  return( (mirrored ? DriveL : DriveR).position(deg)*drive_in_to_deg_ratio*x_drive_factor() );
 }
 
 /**
@@ -285,9 +287,17 @@ void Drive::turn_to_angle(float angle, float turn_max_voltage, float turn_settle
   if (take_chain()) { turn_settle_error = turn_chain_error; turn_settle_time = 0; }
   float previous_output = current_turn_voltage();
 
-  PID turnPID(reduce_negative_180_to_180(angle - get_absolute_heading()), turn_kp, turn_ki, turn_kd, turn_starti, turn_settle_error, turn_settle_time, turn_timeout);
+  // HHCode: clockwise() / counterclockwise() force the long way round when asked.
+  int direction = take_turn_direction();
+  float start_error = reduce_negative_180_to_180(angle - get_absolute_heading());
+  if (fabs(start_error) <= turn_settle_error) { direction = 0; }
+  if (direction > 0 && start_error < 0) { start_error += 360; }
+  if (direction < 0 && start_error > 0) { start_error -= 360; }
+  float target_rotation = get_rotation() + start_error;
+
+  PID turnPID(start_error, turn_kp, turn_ki, turn_kd, turn_starti, turn_settle_error, turn_settle_time, turn_timeout);
   while( !turnPID.is_settled() ){
-    float error = reduce_negative_180_to_180(angle - get_absolute_heading());
+    float error = direction == 0 ? reduce_negative_180_to_180(angle - get_absolute_heading()) : target_rotation - get_rotation();
     float output = turnPID.compute(error);
     output = clamp(output, -turn_max_voltage, turn_max_voltage);
     output = slew(output, previous_output, turn_slew);
@@ -312,10 +322,15 @@ void Drive::turn_to_angle(float angle, float turn_max_voltage, float turn_settle
  */
 
 void Drive::drive_distance(float distance){
-  drive_distance(distance, get_absolute_heading(), drive_max_voltage, heading_max_voltage, drive_settle_error, drive_settle_time, drive_timeout, drive_kp, drive_ki, drive_kd, drive_starti, heading_kp, heading_ki, heading_kd, heading_starti);
+  drive_distance(distance, get_absolute_heading());
 }
 
 void Drive::drive_distance(float distance, float heading){
+  // HHCode: backward drives can have their own constants.
+  if (distance < 0 && use_backward_constants){
+    drive_distance(distance, heading, backward_max_voltage, heading_max_voltage, drive_settle_error, drive_settle_time, drive_timeout, backward_kp, backward_ki, backward_kd, backward_starti, heading_kp, heading_ki, heading_kd, heading_starti);
+    return;
+  }
   drive_distance(distance, heading, drive_max_voltage, heading_max_voltage, drive_settle_error, drive_settle_time, drive_timeout, drive_kp, drive_ki, drive_kd, drive_starti, heading_kp, heading_ki, heading_kd, heading_starti);
 }
 
@@ -379,8 +394,8 @@ void Drive::left_swing_to_angle(float angle, float swing_max_voltage, float swin
     float error = reduce_negative_180_to_180(angle - get_absolute_heading());
     float output = swingPID.compute(error);
     output = clamp(output, -turn_max_voltage, turn_max_voltage);
-    DriveL.spin(fwd, output, volt);
-    DriveR.stop(hold);
+    (mirrored ? DriveR : DriveL).spin(fwd, output, volt);
+    (mirrored ? DriveL : DriveR).stop(hold);
     hh::graph::record(error, output);   // HHCode
     task::sleep(10);
   }
@@ -400,8 +415,8 @@ void Drive::right_swing_to_angle(float angle, float swing_max_voltage, float swi
     float error = reduce_negative_180_to_180(angle - get_absolute_heading());
     float output = swingPID.compute(error);
     output = clamp(output, -turn_max_voltage, turn_max_voltage);
-    DriveR.spin(reverse, output, volt);
-    DriveL.stop(hold);
+    (mirrored ? DriveL : DriveR).spin(reverse, output, volt);
+    (mirrored ? DriveR : DriveL).stop(hold);
     hh::graph::record(error, output);   // HHCode
     task::sleep(10);
   }
@@ -442,9 +457,9 @@ float Drive::get_SidewaysTracker_position(){
   if (drive_setup==TANK_ONE_FORWARD_ENCODER || drive_setup == TANK_ONE_FORWARD_ROTATION || drive_setup == ZERO_TRACKER_ODOM){
     return(0);
   }else if (drive_setup == TANK_TWO_ENCODER || drive_setup == HOLONOMIC_TWO_ENCODER || drive_setup == TANK_ONE_SIDEWAYS_ENCODER){
-    return(E_SidewaysTracker.position(deg)*SidewaysTracker_in_to_deg_ratio);
+    return((mirrored ? -1.0 : 1.0)*E_SidewaysTracker.position(deg)*SidewaysTracker_in_to_deg_ratio);
   }else{
-    return(R_SidewaysTracker.position(deg)*SidewaysTracker_in_to_deg_ratio);
+    return((mirrored ? -1.0 : 1.0)*R_SidewaysTracker.position(deg)*SidewaysTracker_in_to_deg_ratio);
   }
 }
 
@@ -469,7 +484,7 @@ void Drive::position_track(){
  */
 
 void Drive::set_heading(float orientation_deg){
-  Gyro.setRotation(orientation_deg*gyro_scale/360.0, deg);
+  Gyro.setRotation((mirrored ? -1.0 : 1.0)*orientation_deg*gyro_scale/360.0, deg);
 }
 
 /**
@@ -770,10 +785,12 @@ void Drive::holonomic_drive_to_pose(float X_position, float Y_position, float an
 
     float heading_error = atan2(Y_position-get_Y_position(), X_position-get_X_position());
 
-    DriveLF.spin(fwd, drive_output*cos(to_rad(get_absolute_heading()) + heading_error - M_PI/4) + turn_output, volt);
-    DriveLB.spin(fwd, drive_output*cos(-to_rad(get_absolute_heading()) - heading_error + 3*M_PI/4) + turn_output, volt);
-    DriveRB.spin(fwd, drive_output*cos(to_rad(get_absolute_heading()) + heading_error - M_PI/4) - turn_output, volt);
-    DriveRF.spin(fwd, drive_output*cos(-to_rad(get_absolute_heading()) - heading_error + 3*M_PI/4) - turn_output, volt);
+    // HHCode: sent through spin_holonomic() so mirrored autons work.
+    spin_holonomic(
+      drive_output*cos(to_rad(get_absolute_heading()) + heading_error - M_PI/4) + turn_output,
+      drive_output*cos(-to_rad(get_absolute_heading()) - heading_error + 3*M_PI/4) - turn_output,
+      drive_output*cos(-to_rad(get_absolute_heading()) - heading_error + 3*M_PI/4) + turn_output,
+      drive_output*cos(to_rad(get_absolute_heading()) + heading_error - M_PI/4) - turn_output);
     hh::graph::record(drive_error, drive_output);   // HHCode
     task::sleep(10);
   }
@@ -874,7 +891,7 @@ int Drive::motion_task_function(){
 void Drive::record_progress_start(motion_kind kind){
   progress_kind = kind;
   progress_start_position = (get_left_position_in()+get_right_position_in())/2.0;
-  progress_start_rotation = Gyro.rotation()*360.0/gyro_scale;
+  progress_start_rotation = get_rotation();
   progress_start_strafe = get_strafe_position_in();
   progress_start_X = get_X_position();
   progress_start_Y = get_Y_position();
@@ -948,7 +965,7 @@ void Drive::wait(){
 float Drive::motion_progress(){
   switch (progress_kind){
     case MOTION_TURN:
-      return(fabs(Gyro.rotation()*360.0/gyro_scale - progress_start_rotation));
+      return(fabs(get_rotation() - progress_start_rotation));
     case MOTION_ODOM:
       return(hypot(get_X_position()-progress_start_X, get_Y_position()-progress_start_Y));
     case MOTION_STRAFE:
@@ -986,7 +1003,7 @@ float Drive::current_drive_voltage(){
 }
 
 float Drive::current_turn_voltage(){
-  return((DriveL.voltage(volt)-DriveR.voltage(volt))/2.0);
+  return((mirrored ? -1.0 : 1.0)*(DriveL.voltage(volt)-DriveR.voltage(volt))/2.0);
 }
 
 /**
@@ -1025,7 +1042,7 @@ void Drive::set_holonomic_cartridge(vex::gearSetting cartridge){
 
 float Drive::get_strafe_position_in(){
   float wheel_degrees = (DriveLF.position(deg) - DriveRF.position(deg) - DriveLB.position(deg) + DriveRB.position(deg))/4.0;
-  return(wheel_degrees*drive_in_to_deg_ratio*x_drive_factor()*strafe_multiplier);
+  return((mirrored ? -1.0 : 1.0)*wheel_degrees*drive_in_to_deg_ratio*x_drive_factor()*strafe_multiplier);
 }
 
 /**
@@ -1069,10 +1086,7 @@ void Drive::strafe_distance(float distance, float heading, float drive_max_volta
     previous_output = drive_output;
     if (check_stall(drive_output)) { break; }
 
-    DriveLF.spin(fwd, drive_output+heading_output, volt);
-    DriveRF.spin(fwd, -drive_output-heading_output, volt);
-    DriveLB.spin(fwd, -drive_output+heading_output, volt);
-    DriveRB.spin(fwd, drive_output-heading_output, volt);
+    spin_holonomic(drive_output+heading_output, -drive_output-heading_output, -drive_output+heading_output, drive_output-heading_output);
     hh::graph::record(drive_error, drive_output);   // HHCode
     task::sleep(10);
   }
@@ -1114,6 +1128,7 @@ void Drive::follow_path(std::vector<path_point> path, float lookahead, bool back
 
   // The path starts where the robot is now.
   path.insert(path.begin(), {get_X_position(), get_Y_position()});
+  if (path_smoothing > 0 && path.size() > 2) { path = smooth_path(path, path_smoothing); }
   int last = path.size()-1;
   path_point end = path[last];
 
@@ -1198,4 +1213,143 @@ void Drive::follow_path(std::vector<path_point> path, float lookahead, bool back
     hh::graph::record(drive_error, drive_output);   // HHCode
     task::sleep(10);
   }
+}
+
+/*---------------------------------------------------------------------------*/
+/*  HHCode: mirrored autons.                                                 */
+/*---------------------------------------------------------------------------*/
+
+/**
+ * Makes the chassis behave as its own mirror image, so an auton written for
+ * one side of the field runs on the other: left and right are swapped and
+ * headings count the other way. hh::selector turns this on and off for autons
+ * added with add_mirrored(); you don't normally call it yourself.
+ */
+
+void Drive::set_mirrored(bool mirror){
+  mirrored = mirror;
+  // A real forward tracking wheel is on the other side of a mirrored robot.
+  float forward_distance = ForwardTracker_center_distance;
+  if (mirror && drive_setup != ZERO_TRACKER_ODOM) { forward_distance = -forward_distance; }
+  if (drive_setup == TANK_ONE_FORWARD_ENCODER || drive_setup == TANK_ONE_FORWARD_ROTATION || drive_setup == ZERO_TRACKER_ODOM){
+    odom.set_physical_distances(forward_distance, 0);
+  }
+  if (drive_setup == TANK_ONE_SIDEWAYS_ENCODER || drive_setup == TANK_ONE_SIDEWAYS_ROTATION ||
+  drive_setup == TANK_TWO_ENCODER || drive_setup == TANK_TWO_ROTATION ||
+  drive_setup == HOLONOMIC_TWO_ENCODER || drive_setup == HOLONOMIC_TWO_ROTATION){
+    odom.set_physical_distances(forward_distance, SidewaysTracker_center_distance);
+  }
+}
+
+bool Drive::is_mirrored(){
+  return(mirrored);
+}
+
+/**
+ * The inertial sensor's rotation in degrees, not wrapped to 0-360, with the
+ * gyro scale applied. Counts the other way in a mirrored auton.
+ */
+
+float Drive::get_rotation(){
+  return((mirrored ? -1.0 : 1.0)*Gyro.rotation()*360.0/gyro_scale);
+}
+
+/**
+ * Spins the four holonomic wheels, swapping left and right in a mirrored auton.
+ */
+
+void Drive::spin_holonomic(float lf, float rf, float lb, float rb){
+  if (mirrored){
+    float swap = lf; lf = rf; rf = swap;
+    swap = lb; lb = rb; rb = swap;
+  }
+  DriveLF.spin(fwd, lf, volt);
+  DriveRF.spin(fwd, rf, volt);
+  DriveLB.spin(fwd, lb, volt);
+  DriveRB.spin(fwd, rb, volt);
+}
+/*---------------------------------------------------------------------------*/
+/*  HHCode: turn direction, backward constants, path smoothing.              */
+/*---------------------------------------------------------------------------*/
+
+/**
+ * Makes the next turn_to_angle() go clockwise (to the right) even when the
+ * other way is shorter. Useful when something is in the way.
+ *
+ *   chassis.clockwise().turn_to_angle(270);
+ */
+
+Drive& Drive::clockwise(){
+  next_turn_direction = 1;
+  return(*this);
+}
+
+Drive& Drive::counterclockwise(){
+  next_turn_direction = -1;
+  return(*this);
+}
+
+int Drive::take_turn_direction(){
+  int direction = next_turn_direction;
+  next_turn_direction = 0;
+  return(direction);
+}
+
+/**
+ * Gives backward drives their own constants, for robots that behave
+ * differently in reverse (weight at one end, different traction). Used by
+ * drive_distance(distance) and drive_distance(distance, heading) when the
+ * distance is negative.
+ */
+
+void Drive::set_drive_backward_constants(float max_voltage, float kp, float ki, float kd, float starti){
+  backward_max_voltage = max_voltage;
+  backward_kp = kp;
+  backward_ki = ki;
+  backward_kd = kd;
+  backward_starti = starti;
+  use_backward_constants = true;
+}
+
+void Drive::clear_drive_backward_constants(){
+  use_backward_constants = false;
+}
+
+/**
+ * Rounds the corners of a path. Points are added every few inches, then
+ * pulled toward their neighbors. The first and last points don't move.
+ *
+ * @param path The corner points.
+ * @param smoothing 0 leaves the path alone; 0.9 is very round.
+ */
+
+std::vector<path_point> Drive::smooth_path(std::vector<path_point> path, float smoothing){
+  smoothing = clamp(smoothing, 0, 0.98);
+  const float spacing = 3;
+
+  std::vector<path_point> dense;
+  for (int i = 0; i+1 < (int)path.size(); i++){
+    float dx = path[i+1].x-path[i].x;
+    float dy = path[i+1].y-path[i].y;
+    int steps = (int)(hypot(dx, dy)/spacing);
+    if (steps < 1) { steps = 1; }
+    for (int j = 0; j < steps; j++){
+      dense.push_back({path[i].x + dx*j/steps, path[i].y + dy*j/steps});
+    }
+  }
+  dense.push_back(path[path.size()-1]);
+
+  std::vector<path_point> smooth = dense;
+  float keep = 1 - smoothing;
+  for (int pass = 0; pass < 200; pass++){
+    float change = 0;
+    for (int i = 1; i+1 < (int)smooth.size(); i++){
+      float x = smooth[i].x + keep*(dense[i].x-smooth[i].x) + smoothing*(smooth[i-1].x+smooth[i+1].x-2*smooth[i].x);
+      float y = smooth[i].y + keep*(dense[i].y-smooth[i].y) + smoothing*(smooth[i-1].y+smooth[i+1].y-2*smooth[i].y);
+      change += fabs(x-smooth[i].x) + fabs(y-smooth[i].y);
+      smooth[i] = {x, y};
+    }
+    if (change < 0.001) { break; }
+  }
+  return(smooth);
 }
