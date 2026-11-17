@@ -1,8 +1,8 @@
 # Student Setup Guide
 
-Do this once on every computer you'll code on. It takes about 20–30 minutes,
-most of it waiting for downloads. You need admin rights on the computer for
-steps 1–3 (school laptops may need IT).
+Do this once on every computer you'll code on. It takes about 20 minutes,
+most of it waiting for downloads. You may need admin rights on the computer
+for step 1 (school laptops may need IT).
 
 ## 1. Install VS Code
 
@@ -12,26 +12,7 @@ steps 1–3 (school laptops may need IT).
    **Mac:** open the download and drag *Visual Studio Code* into *Applications*.
 3. Open VS Code.
 
-## 2. Install Git
-
-Git is how you download the template and save/share your code.
-
-- **Windows:** download from https://git-scm.com/download/win and click Next through
-  the installer (the defaults are fine).
-- **Mac:** open Terminal and type `git --version`. If it isn't installed, macOS
-  will offer to install the developer tools. Click **Install**.
-
-Then tell Git who you are (open VS Code, then **Terminal → New Terminal**):
-
-```
-git config --global user.name "Your Name"
-git config --global user.email "you@example.com"
-```
-
-Make a free GitHub account at https://github.com if you don't have one, and give
-your username to your coach.
-
-## 3. Install the VS Code extensions
+## 2. Install the VS Code extensions
 
 1. In VS Code, click the **Extensions** icon on the left (four squares), or press
    `Ctrl+Shift+X` (`Cmd+Shift+X` on Mac).
@@ -42,24 +23,26 @@ your username to your coach.
    *Disable (Workspace)*.)
 
 Opening the template later also pops up "This workspace has extension
-recommendations". Clicking **Install** does steps 2–3 for you.
+recommendations". Clicking **Install** installs both for you.
 
-## 4. Get the code
+## 3. Get the code
 
-Your coach will tell you which of these to use.
+Your coach gives you the template as a **zip file**.
 
-**A. Your team already has its own repo**
-1. In VS Code: **View → Command Palette** (`Ctrl+Shift+P`) → type **Git: Clone** → Enter.
-2. Paste the repo link (e.g. `https://github.com/<team-account>/<team-repo>`).
-3. Pick a folder (e.g. `Documents/VEX`), then click **Open** when asked.
-4. If VS Code asks "Do you trust the authors?", click **Yes**.
+1. Find the zip (usually in *Downloads*, or wherever your coach put it).
+2. Unzip it into a folder you'll remember, like `Documents/VEX`.
+   **Windows:** right-click the zip → **Extract All...** → pick the folder → **Extract**.
+   **Mac:** double-click the zip, then drag the new folder to where you want it.
+3. Rename the unzipped folder after your team, like `1234A-2026`.
+4. In VS Code: **File → Open Folder...**, pick that folder, and click
+   **Select Folder** (**Open** on a Mac).
+5. If VS Code asks "Do you trust the authors?", click **Yes**.
 
-**B. Starting a new team repo from the template**
-1. On the template's GitHub page, click **Use this template → Create a new repository**.
-2. Name it after your team (e.g. `1234A-2026`) and click **Create**.
-3. Clone your new repo as in option A.
+On Windows, don't work on the files while they're still inside the zip.
+Double-clicking a zip only peeks inside it, and VS Code can't build from
+there. Extract it first.
 
-## 5. First build (downloads the VEX toolchain)
+## 4. First build (downloads the VEX toolchain)
 
 1. With the project open, look at the bottom-left of VS Code for the VEX bar
    (the VEX logo, **Build**, **Download/Run** icons, and a slot number).
@@ -69,9 +52,10 @@ Your coach will tell you which of these to use.
 3. You should see `Build Finished` with no errors in the output panel.
 
 If the VEX bar isn't there, make sure you opened the project **folder** (the
-one with `makefile` in it), not a parent folder.
+one with `makefile` in it), not a parent folder. Unzipping sometimes puts the
+project one folder deeper than you expect.
 
-## 6. Download to the robot
+## 5. Download to the robot
 
 1. Plug the V5 Brain into the computer with a micro-USB cable (or plug the
    controller in, if it's paired with the Brain).
@@ -81,20 +65,26 @@ one with `makefile` in it), not a parent folder.
 4. Click **Download** to send the program, or **Run** to send and start it.
 5. On the Brain, the program appears under that slot with the project name.
 
-## 7. Day-to-day workflow
+## 6. Day-to-day workflow
 
-1. **Pull** before you start: click the Source Control icon (left bar) → `...` → **Pull**.
-2. Make your changes.
+1. Open your team folder in VS Code.
+2. Make your changes. Save with `Ctrl+S` (`Cmd+S` on Mac).
 3. **Build** often. Fix the first error first; later errors are often caused by it.
-4. **Commit** when something works: Source Control → type a short message
-   ("tuned turn PID", "added intake subsystem") → **Commit**.
-5. **Sync/Push** so teammates get it.
+4. **Download** and test on the robot.
+5. **Back up when something works.** Your code only lives on this computer,
+   so copy the whole team folder to a USB drive or your school cloud drive at
+   the end of each meeting. Put the date in the copy's name
+   (`1234A-2026 backup Nov 17`) so you can go back to a version that worked.
+
+Only one computer should hold the team's "real" copy. If two people edit
+separate copies, someone has to merge the changes by hand.
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
 | No VEX bar at the bottom | Open the folder that contains `makefile`. Check the VEX Robotics extension is installed and enabled. |
+| Build fails right after unzipping | Make sure the zip was extracted (step 3), not just opened, and that the folder isn't inside a cloud-synced folder that is still syncing. |
 | Red squiggles everywhere but it builds fine | Build once so the SDK downloads, then reload VS Code (**Command Palette → Developer: Reload Window**). |
 | `make: command not found` or toolchain errors | Let the VEX extension finish downloading the SDK. If it keeps failing, reinstall the VEX extension. |
 | Brain not detected | Try a different USB cable (some are charge-only) and a different USB port. Turn the Brain on. |
