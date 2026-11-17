@@ -87,6 +87,8 @@ void Spinner::update() {
 
 void Spinner::on_driver_start() { stop(); }
 
+void Spinner::on_disable() { stop(); }
+
 float Spinner::temperature() { return motors.temperature(vex::temperatureUnits::celsius); }
 
 }  // namespace hh

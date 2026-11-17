@@ -883,7 +883,7 @@ bool Drive::begin_motion(motion_kind kind, std::function<void()> motion){
     in_motion_task = false;
   } else {
     // A new motion replaces any background motion still running.
-    cancel_motion();
+    stop_motion_task();
     if (next_async){
       next_async = false;
       record_progress_start(kind);
@@ -899,10 +899,24 @@ bool Drive::begin_motion(motion_kind kind, std::function<void()> motion){
   return(false);
 }
 
-void Drive::cancel_motion(){
+void Drive::stop_motion_task(){
   if (motion_active){
     motion_task.stop();
     motion_active = false;
+  }
+  in_motion_task = false;
+}
+
+/**
+ * Stops a background motion and brakes the drive. Does nothing if no
+ * background motion is running.
+ */
+
+void Drive::cancel_motion(){
+  bool was_moving = motion_active;
+  stop_motion_task();
+  if (was_moving){
+    drive_stop(brake);
   }
 }
 
@@ -948,7 +962,9 @@ void Drive::wait_until(float amount){
 float Drive::slew(float target, float previous, float volts_per_second){
   if (volts_per_second <= 0) { return(target); }
   float step = volts_per_second/100.0;
-  bool speeding_up = fabs(target) > fabs(previous) || target*previous < 0;
+  // Changing direction: drop to zero at once, then ramp up the other way.
+  if (target*previous < 0) { previous = 0; }
+  bool speeding_up = fabs(target) > fabs(previous);
   if (speeding_up && fabs(target-previous) > step){
     return(previous + (target > previous ? step : -step));
   }
@@ -1079,7 +1095,8 @@ void Drive::follow_path(std::vector<path_point> path, float lookahead, bool back
 }
 
 void Drive::follow_path(std::vector<path_point> path, float lookahead, bool backwards, float drive_min_voltage, float drive_max_voltage, float heading_max_voltage, float drive_settle_error, float drive_settle_time, float drive_timeout, float drive_kp, float drive_ki, float drive_kd, float drive_starti, float heading_kp, float heading_ki, float heading_kd, float heading_starti){
-  if (path.empty()) { return; }
+  if (path.empty()) { next_async = false; next_chain = false; return; }
+  if (lookahead < 1) { lookahead = 1; }
   if (begin_motion(MOTION_ODOM, [=]{ follow_path(path, lookahead, backwards, drive_min_voltage, drive_max_voltage, heading_max_voltage, drive_settle_error, drive_settle_time, drive_timeout, drive_kp, drive_ki, drive_kd, drive_starti, heading_kp, heading_ki, heading_kd, heading_starti); })) { return; }
   if (take_chain()) { drive_settle_error = drive_chain_error; drive_settle_time = 0; }
   float previous_output = current_drive_voltage();
@@ -1108,24 +1125,31 @@ void Drive::follow_path(std::vector<path_point> path, float lookahead, bool back
     float X = get_X_position();
     float Y = get_Y_position();
 
-    // Find where the lookahead circle crosses the path, as far along as possible.
+    // Move on to the next segment once the end of this one is inside the
+    // lookahead circle. Segments are only ever taken in order, so a path that
+    // crosses itself can't make the robot skip ahead, and points closer
+    // together than the lookahead distance are fine.
+    while (segment < last-1 && hypot(path[segment+1].x-X, path[segment+1].y-Y) <= lookahead){
+      segment++;
+    }
+
+    // Aim where the lookahead circle crosses this segment. If it doesn't (the
+    // robot is off the path), aim at the end of the segment.
     path_point target = path[segment+1];
-    // Only this segment and the next are checked, so a path that crosses
-    // itself can't make the robot skip ahead.
-    for (int i = segment; i < last && i <= segment+1; i++){
-      float dx = path[i+1].x-path[i].x;
-      float dy = path[i+1].y-path[i].y;
-      float fx = path[i].x-X;
-      float fy = path[i].y-Y;
+    {
+      float dx = path[segment+1].x-path[segment].x;
+      float dy = path[segment+1].y-path[segment].y;
+      float fx = path[segment].x-X;
+      float fy = path[segment].y-Y;
       float a = dx*dx + dy*dy;
       float b = 2*(fx*dx + fy*dy);
       float c = fx*fx + fy*fy - lookahead*lookahead;
       float discriminant = b*b - 4*a*c;
-      if (a == 0 || discriminant < 0) { continue; }
-      float t = (-b + sqrt(discriminant))/(2*a);
-      if (t >= 0 && t <= 1){
-        segment = i;
-        target = {path[i].x + t*dx, path[i].y + t*dy};
+      if (a != 0 && discriminant >= 0){
+        float t = (-b + sqrt(discriminant))/(2*a);
+        if (t >= 0 && t <= 1){
+          target = {path[segment].x + t*dx, path[segment].y + t*dy};
+        }
       }
     }
     // Close to the end, aim at the end itself.

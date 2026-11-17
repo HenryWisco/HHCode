@@ -55,6 +55,8 @@ void Positioner::stop() {
 void Positioner::zero(float position) {
   offset_ = 0;
   offset_ = position - this->position();
+  // The old target is now in the wrong place, so stay where we are instead.
+  if (mode_ == POSITION) hold();
 }
 
 void Positioner::set_limits(float min_position, float max_position) {

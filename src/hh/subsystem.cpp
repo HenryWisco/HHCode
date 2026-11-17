@@ -42,8 +42,19 @@ uint32_t now_ms() { return vex::timer::system(); }
 bool robot_enabled() { return Competition.isEnabled(); }
 
 static int background_task() {
+  bool was_enabled = false;
   while (true) {
-    if (robot_enabled()) {
+    bool enabled = robot_enabled();
+    if (was_enabled && !enabled) {
+      // The Brain stops every motor when the robot is disabled. Let each
+      // mechanism forget what it was doing so nothing restarts by itself.
+      for (int i = 0; i < subsystem_total; i++) {
+        subsystem_list[i]->on_disable();
+      }
+    }
+    was_enabled = enabled;
+
+    if (enabled) {
       for (int i = 0; i < subsystem_total; i++) {
         subsystem_list[i]->update();
       }

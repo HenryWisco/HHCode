@@ -72,6 +72,7 @@ public:
 
   void update() override;
   void on_driver_start() override;
+  void on_disable() override;
   float temperature() override;
 
   /** The motors, for anything this class doesn't cover. */

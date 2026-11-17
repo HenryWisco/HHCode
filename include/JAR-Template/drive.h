@@ -56,6 +56,7 @@ private:
   void record_progress_start(motion_kind kind);
   bool begin_motion(motion_kind kind, std::function<void()> motion);
   bool take_chain();
+  void stop_motion_task();
   float slew(float target, float previous, float volts_per_second);
   bool check_stall(float commanded_voltage);
   float current_drive_voltage();
@@ -227,7 +228,7 @@ public:
   void wait_until(float amount);
   bool is_moving();
   float motion_progress();
-  // Stops a background motion where it is.
+  // Stops a background motion and brakes the drive.
   void cancel_motion();
 
   // Mecanum / X-drive: strafe sideways using the drive motor encoders.

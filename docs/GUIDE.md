@@ -29,7 +29,9 @@ In `src/robot-config.cpp`:
 2. **Section 2:** put them in the chassis: `motor_group(LeftFront, LeftBack)` for
    the left side, the same for the right, then the inertial sensor port, wheel
    diameter and gear ratio. Mecanum and X-drive robots also fill in the four
-   wheel ports (LF, RF, LB, RB).
+   wheel ports (LF, RF, LB, RB), with a minus sign on the same motors that
+   are `true` (reversed) in section 1. Don't plug a reversed wheel motor into
+   port 1: `-PORT1` can't be told apart from `PORT1`.
 3. **Section 4:** pick `drive_type` and `style`.
 
 Build, download, and drive. If the robot goes the wrong way, flip `true`/`false`
@@ -164,6 +166,10 @@ public:
   void update() override {
     // runs every 10 ms in auton and driver control
   }
+  void on_disable() override {
+    // runs when the robot is disabled between match periods; forget any
+    // command here so the mechanism doesn't restart by itself
+  }
 };
 ```
 
@@ -198,6 +204,8 @@ chassis.wait();            // then wait for the drive to finish
 ```
 
 `wait_until` counts inches for drives and strafes, degrees for turns and swings.
+`chassis.cancel_motion();` stops a background motion and brakes. Starting any
+new motion also replaces one that is still running.
 Mechanisms never need `async()`: `lift.go_to("high")` already runs in the
 background.
 

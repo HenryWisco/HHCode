@@ -26,6 +26,8 @@ public:
   virtual void update() {}
   /** Runs once when driver control begins. */
   virtual void on_driver_start() {}
+  /** Runs once each time the robot is disabled (between match periods). */
+  virtual void on_disable() {}
   /** Hottest motor in degrees C, or 0 if this mechanism has no motors. */
   virtual float temperature() { return 0; }
 };

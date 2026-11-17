@@ -193,6 +193,8 @@ void update() {
   // A gap means driver control has just (re)started.
   if (last_update == 0 || now - last_update > 250) {
     braking = false;
+    // A background motion left over from autonomous must not fight the driver.
+    chassis.cancel_motion();
     tuner::reset();
     for (int i = 0; i < subsystem_count(); i++) {
       subsystem_at(i)->on_driver_start();

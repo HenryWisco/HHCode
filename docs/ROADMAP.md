@@ -23,6 +23,10 @@ Written and compiling, **not yet tested on a robot**:
 - Pure pursuit path following (`follow_path`)
 - Live PID tuner on the controller
 
+Written, **not yet run** (needs a C++ compiler on the PC):
+
+- PC simulator and test scenarios in `tests/` (see `tests/README.md`)
+
 Not started:
 
 - Color sorting helper

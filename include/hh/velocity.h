@@ -56,6 +56,7 @@ public:
   void bind_toggle(Button button, float rpm);
 
   void update() override;
+  void on_disable() override { stop(); }
   float temperature() override;
 
   /** The motors, for anything this class doesn't cover. */
