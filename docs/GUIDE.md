@@ -186,6 +186,71 @@ public:
    hh::selector::add("Red Left", "4 rings, touches ladder", red_left);
    ```
 
+### Smarter autons
+
+**Do two things at once.** `async()` makes the next motion return right away:
+
+```cpp
+chassis.async().drive_distance(36);
+chassis.wait_until(12);    // 12 inches in...
+intake.spin();             // ...start the intake
+chassis.wait();            // then wait for the drive to finish
+```
+
+`wait_until` counts inches for drives and strafes, degrees for turns and swings.
+Mechanisms never need `async()`: `lift.go_to("high")` already runs in the
+background.
+
+**Don't stop between motions.** `chain()` ends the next motion as soon as it is
+close, so the robot flows into the one after:
+
+```cpp
+chassis.chain().drive_distance(24);
+chassis.chain().turn_to_angle(45);
+chassis.drive_distance(12);          // the last one settles normally
+```
+
+**Follow a curved path** (odom robots). The robot drives smoothly through the
+points instead of stopping at each one:
+
+```cpp
+chassis.follow_path({{0, 24}, {24, 48}, {48, 48}});
+chassis.follow_path({{24, 24}, {0, 0}}, 10, true);   // 10 inch lookahead, backwards
+```
+
+**Strafe** (mecanum / X-drive, no odom needed): `chassis.strafe_distance(12);`
+Positive is right. If it goes the wrong distance, tune
+`chassis.strafe_multiplier`. Blue or red motors also need
+`chassis.set_holonomic_cartridge(ratio6_1);` in `configure_robot()`.
+
+**Settings** in `src/autons/constants.cpp`:
+
+| Setting | What it does |
+|---|---|
+| `chassis.drive_slew`, `turn_slew` | Ramps the voltage up at the start of a motion (volts per second). Stops wheelies and wheel spin. Try 30 to 60. |
+| `chassis.stall_time` | A motion gives up after the robot has been stuck this many ms, so one bad bump doesn't burn the whole auton. `chassis.interfered` is true afterwards. Try 300. |
+| `chassis.drive_chain_error`, `turn_chain_error` | How close counts as "done" for `chain()`. |
+| `chassis.path_lookahead` | Default lookahead for `follow_path`. Bigger is smoother, smaller is tighter. |
+
+### Tuning PID without re-downloading
+
+Set `hh::tuner::enabled = true;` in `configure_robot()`. In driver control the
+controller then works like this (your own button bindings are paused):
+
+| Button | Does |
+|---|---|
+| Up / Down | Pick a constant (Drive kP, Turn kD, ...) |
+| Left / Right | Lower / raise it |
+| A | Run the auton chosen on the Brain screen |
+| B | Stop it |
+| X | Print all constants to the VS Code terminal, ready to paste into `constants.cpp` |
+
+Pick "Drive Test" or "Turn Test" on the Brain, press A, watch, adjust, repeat.
+The sticks still drive so you can reset the robot. Changes are lost when the
+program restarts, so press X and copy them into `constants.cpp`. Autons that
+call `default_constants()` or `odom_constants()` themselves will undo your
+changes. **Turn the tuner off for competition.**
+
 **Picking an auton:** tap the left or right half of the Brain screen. When the
 robot is plugged into a competition switch or the field and disabled, the
 controller's Left/Right arrows work too and the controller shows the choice.

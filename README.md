@@ -5,9 +5,8 @@ Robotics extension**. It starts from [JAR-Template](https://jacksonarearobotics.
 (v1.2.0) and adds the best parts of [EZ-Template](https://ez-robotics.github.io/EZ-Template/),
 plus our own custom features.
 
-> **Status:** in progress. Driver control, the auton selector and the mechanism
-> blocks are written and compile, but have not been tested on a robot yet.
-> Autonomous motion upgrades come next. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status:** in progress. The features in the roadmap are written and compile,
+> but have not been tested on a robot yet. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Quick start (students)
 
@@ -22,14 +21,14 @@ plus our own custom features.
 ```
 .vscode/                 Shared VS Code + VEX extension settings (don't edit)
 include/
-  JAR-Template/          JAR-Template library headers (upstream, untouched)
+  JAR-Template/          JAR-Template library headers (our additions are marked "HHCode:")
   hh/                    Our library additions (EZ ports + custom features)
   subsystems/            Headers for custom mechanisms the blocks don't cover
   robot-config.h         Motor / sensor / mechanism declarations
   autons.h               Auton function declarations
   vex.h                  Main include
 src/
-  JAR-Template/          JAR-Template library source (upstream, untouched)
+  JAR-Template/          JAR-Template library source (our additions are marked "HHCode:")
   hh/                    Our library additions
   subsystems/            Source for custom mechanisms
   autons/                Auton routines, PID constants, and the auton list

@@ -193,11 +193,18 @@ void update() {
   // A gap means driver control has just (re)started.
   if (last_update == 0 || now - last_update > 250) {
     braking = false;
+    tuner::reset();
     for (int i = 0; i < subsystem_count(); i++) {
       subsystem_at(i)->on_driver_start();
     }
   }
   last_update = now;
+
+  // The PID tuner takes over the controller while it is turned on.
+  if (tuner::enabled) {
+    if (!tuner::update()) drive();
+    return;
+  }
 
   if (curve_tuning) tune_curves();
   update_buttons();

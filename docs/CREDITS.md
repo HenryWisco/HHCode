@@ -11,6 +11,8 @@ in every copy.
   versions of `src/main.cpp`, `src/autons.cpp`, `src/robot-config.cpp`,
   `include/*.h`, `makefile`, `vex/`
 - License: MIT
+- Modified: `drive.h` and `drive.cpp` contain HHCode additions, each marked
+  with a `HHCode:` comment.
 
 ```
 MIT License

@@ -9,7 +9,7 @@
  *   2. Declare it at the bottom of include/autons.h:   void red_left();
  *   3. Add a line here.
  *
- * The seven below are JAR-Template's test routines (src/autons/tests.cpp).
+ * The ones below are test routines (src/autons/tests.cpp).
  * Use them to tune your robot, then delete the ones you don't need.
  */
 
@@ -21,4 +21,6 @@ void register_autons() {
   hh::selector::add("Odom Test", "Doesn't move. Prints position to the screen; push the robot around to check it.", odom_test);
   hh::selector::add("Tank Odom Test", "Odom robots only. Drives to (24, 24) and back.", tank_odom_test);
   hh::selector::add("Holonomic Odom Test", "Mecanum / X-drive with odom only. Drives a square while turning.", holonomic_odom_test);
+  hh::selector::add("Strafe Test", "Mecanum / X-drive only. Strafes 24 inches right, then back.", strafe_test);
+  hh::selector::add("Async Test", "Drives 36 inches, prints when it passes 12, turns around and comes back.", async_test);
 }

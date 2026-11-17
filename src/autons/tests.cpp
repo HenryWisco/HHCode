@@ -96,3 +96,30 @@ void holonomic_odom_test(){
   chassis.holonomic_drive_to_pose(0, 18, 270);
   chassis.holonomic_drive_to_pose(0, 0, 0);
 }
+
+/**
+ * HHCode: mecanum / X-drive only. Strafes right and comes back, without
+ * needing odometry. If it goes too far or not far enough, adjust
+ * chassis.strafe_multiplier.
+ */
+
+void strafe_test(){
+  chassis.strafe_distance(24);
+  chassis.strafe_distance(-24);
+}
+
+/**
+ * HHCode: shows async(), wait_until() and chain(). Drives 36 inches, printing
+ * to the Brain when it passes 12 inches, then flows into a turn and comes back.
+ */
+
+void async_test(){
+  chassis.async().drive_distance(36);
+  chassis.wait_until(12);
+  Brain.Screen.printAt(5, 40, "Passed 12 inches");
+  chassis.wait();
+  chassis.turn_to_angle(180);
+  chassis.chain().drive_distance(18);
+  chassis.drive_distance(18);
+  chassis.turn_to_angle(0);
+}

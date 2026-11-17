@@ -20,6 +20,8 @@ void full_test();
 void odom_test();
 void tank_odom_test();
 void holonomic_odom_test();
+void strafe_test();
+void async_test();
 
 // Declare your own autons below, one line each:
 

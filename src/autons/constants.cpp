@@ -19,6 +19,18 @@ void default_constants(){
   chassis.set_drive_exit_conditions(1.5, 300, 5000);
   chassis.set_turn_exit_conditions(1, 300, 3000);
   chassis.set_swing_exit_conditions(1, 300, 3000);
+
+  // HHCode extras. See docs/GUIDE.md, "Smarter autons".
+  // Slew: the most the voltage may rise per second at the start of a motion.
+  // 0 is off. Try 30 to 60 if the robot wheelies or spins its wheels.
+  chassis.drive_slew = 0;
+  chassis.turn_slew = 0;
+  // Stall detection: a motion gives up after the robot has been stuck for this
+  // many ms. 0 is off. Try 300.
+  chassis.stall_time = 0;
+  // chain() motions end when this close (inches / degrees) to the target.
+  chassis.drive_chain_error = 3;
+  chassis.turn_chain_error = 5;
 }
 
 /**

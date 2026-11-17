@@ -1,9 +1,22 @@
 #pragma once
 #include "vex.h"
+#include <functional>
+#include <vector>
 
-enum drive_setup {ZERO_TRACKER_NO_ODOM, ZERO_TRACKER_ODOM, TANK_ONE_FORWARD_ENCODER, TANK_ONE_FORWARD_ROTATION, 
-TANK_ONE_SIDEWAYS_ENCODER, TANK_ONE_SIDEWAYS_ROTATION, TANK_TWO_ENCODER, TANK_TWO_ROTATION, 
-HOLONOMIC_TWO_ENCODER, HOLONOMIC_TWO_ROTATION};
+// HHCode: this file is JAR-Template v1.2.0 with additions. Every change is
+// marked with a "HHCode:" comment so it can be found when updating JAR.
+
+// HHCode: added HOLONOMIC_ZERO_TRACKER_ODOM (mecanum / X-drive odom from the
+// drive motor encoders, no tracking wheels).
+enum drive_setup {ZERO_TRACKER_NO_ODOM, ZERO_TRACKER_ODOM, TANK_ONE_FORWARD_ENCODER, TANK_ONE_FORWARD_ROTATION,
+TANK_ONE_SIDEWAYS_ENCODER, TANK_ONE_SIDEWAYS_ROTATION, TANK_TWO_ENCODER, TANK_TWO_ROTATION,
+HOLONOMIC_TWO_ENCODER, HOLONOMIC_TWO_ROTATION, HOLONOMIC_ZERO_TRACKER_ODOM};
+
+// HHCode: a point on a path for follow_path(), in inches.
+struct path_point { float x; float y; };
+
+// HHCode: what wait_until() measures for the motion that is running.
+enum motion_kind {MOTION_DRIVE, MOTION_TURN, MOTION_ODOM, MOTION_STRAFE};
 
 /**
  * Drive class supporting tank and holo drive, with or without odom.
@@ -25,7 +38,31 @@ private:
   float SidewaysTracker_in_to_deg_ratio;
   vex:: triport ThreeWire = vex::triport(vex::PORT22);
 
-public: 
+  // HHCode: state for async motions, wait_until(), slew and stall detection.
+  int holonomic_ports[4];
+  bool next_async = false;
+  bool next_chain = false;
+  bool in_motion_task = false;
+  bool motion_active = false;
+  std::function<void()> pending_motion;
+  vex::task motion_task;
+  motion_kind progress_kind = MOTION_DRIVE;
+  float progress_start_position = 0;
+  float progress_start_rotation = 0;
+  float progress_start_strafe = 0;
+  float progress_start_X = 0;
+  float progress_start_Y = 0;
+  float stall_ms = 0;
+  void record_progress_start(motion_kind kind);
+  bool begin_motion(motion_kind kind, std::function<void()> motion);
+  bool take_chain();
+  float slew(float target, float previous, float volts_per_second);
+  bool check_stall(float commanded_voltage);
+  float current_drive_voltage();
+  float current_turn_voltage();
+  static int motion_task_function();
+
+public:
   drive_setup drive_setup = ZERO_TRACKER_NO_ODOM;
   motor_group DriveL;
   motor_group DriveR;
@@ -152,4 +189,68 @@ public:
   void control_arcade();
   void control_tank();
   void control_holonomic();
+
+  /*-------------------------------------------------------------------------*/
+  /*  HHCode additions. See docs/GUIDE.md.                                   */
+  /*-------------------------------------------------------------------------*/
+
+  // Slew: the most the voltage may rise per second at the start of a motion.
+  // Stops wheelies and wheel slip. 0 is off. Try 30 to 60.
+  float drive_slew = 0;
+  float turn_slew = 0;
+
+  // chain() motions end as soon as the robot is within these distances
+  // (inches / degrees) instead of stopping and settling.
+  float drive_chain_error = 3;
+  float turn_chain_error = 5;
+
+  // Stall detection: a motion gives up when the drive is powered but hasn't
+  // moved for this long (ms), e.g. pinned against a wall or another robot.
+  // 0 is off. Try 300. `interfered` says whether the last motion ended this way.
+  float stall_time = 0;
+  bool interfered = false;
+
+  // Mecanum wheels slip sideways. If strafe_distance(24) really goes 20
+  // inches, set this to 20.0 / 24.0.
+  float strafe_multiplier = 1;
+
+  // The next motion returns right away and runs in the background:
+  //   chassis.async().drive_distance(36);
+  Drive& async();
+  // The next motion flows into the one after it without stopping:
+  //   chassis.chain().drive_distance(24);
+  Drive& chain();
+  // Waits for a background motion to finish.
+  void wait();
+  // Waits until a background motion has covered this many inches (drives and
+  // strafes) or degrees (turns and swings), or has finished.
+  void wait_until(float amount);
+  bool is_moving();
+  float motion_progress();
+  // Stops a background motion where it is.
+  void cancel_motion();
+
+  // Mecanum / X-drive: strafe sideways using the drive motor encoders.
+  // Positive is to the right.
+  float get_strafe_position_in();
+  void strafe_distance(float distance);
+  void strafe_distance(float distance, float heading);
+  void strafe_distance(float distance, float heading, float drive_max_voltage, float heading_max_voltage);
+  void strafe_distance(float distance, float heading, float drive_max_voltage, float heading_max_voltage, float drive_settle_error, float drive_settle_time, float drive_timeout, float drive_kp, float drive_ki, float drive_kd, float drive_starti, float heading_kp, float heading_ki, float heading_kd, float heading_starti);
+
+  // Odom robots: drive smoothly through a list of points (pure pursuit).
+  // The robot aims at a spot `lookahead` inches ahead of itself on the path;
+  // bigger is smoother, smaller follows the path more tightly.
+  //   chassis.follow_path({{0, 24}, {24, 48}, {48, 48}});
+  float path_lookahead = 12;
+  void follow_path(std::vector<path_point> path);
+  void follow_path(std::vector<path_point> path, float lookahead);
+  void follow_path(std::vector<path_point> path, float lookahead, bool backwards);
+  void follow_path(std::vector<path_point> path, float lookahead, bool backwards, float drive_min_voltage, float drive_max_voltage, float heading_max_voltage);
+  void follow_path(std::vector<path_point> path, float lookahead, bool backwards, float drive_min_voltage, float drive_max_voltage, float heading_max_voltage, float drive_settle_error, float drive_settle_time, float drive_timeout, float drive_kp, float drive_ki, float drive_kd, float drive_starti, float heading_kp, float heading_ki, float heading_kd, float heading_starti);
+
+  // Mecanum / X-drive: tell the chassis which cartridge the four wheel motors
+  // use, so strafe distances are measured correctly. Not needed for green
+  // (ratio18_1) motors.
+  void set_holonomic_cartridge(vex::gearSetting cartridge);
 };

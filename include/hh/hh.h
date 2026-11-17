@@ -9,3 +9,4 @@
 #include "hh/velocity.h"
 #include "hh/driver.h"
 #include "hh/selector.h"
+#include "hh/tuner.h"

@@ -16,12 +16,18 @@ Written and compiling, **not yet tested on a robot**:
 - Auton selector on the Brain and controller, saved to SD card
 - Inertial calibration at start-up
 
+- Chassis motion upgrades (edits inside `JAR-Template/`, each marked `HHCode:`):
+  slew, `async()` motions with `wait_until`, `chain()`, stall detection
+- Mecanum / X-drive: `strafe_distance` without odometry, X-drive distance
+  correction, encoder-only odometry (`HOLONOMIC_ZERO_TRACKER_ODOM`)
+- Pure pursuit path following (`follow_path`)
+- Live PID tuner on the controller
+
 Not started:
 
-- Slew, async motions with `wait_until`, motion chaining, interference detection
-- Strafe a distance without odometry; mecanum vs X-drive strafe tuning
-- Live PID tuner, pure pursuit
 - Color sorting helper
+- PID graphing on the Brain screen
+- Henry's custom features (below)
 
 ## Design goals (from Henry)
 

@@ -56,6 +56,7 @@ Drive chassis(
 //TANK_TWO_ROTATION
 //HOLONOMIC_TWO_ENCODER
 //HOLONOMIC_TWO_ROTATION
+//HOLONOMIC_ZERO_TRACKER_ODOM   (HHCode: mecanum / X-drive odom from the drive motors, no tracking wheels)
 //
 //Write it here:
 ZERO_TRACKER_NO_ODOM,
@@ -163,6 +164,14 @@ void configure_robot() {
   hh::driver::turn_curve = 0;
   hh::driver::active_brake_kp = 0;    // 0 = off. Try 0.1 to resist being pushed.
   hh::driver::overheat_temp = 55;     // Controller rumbles when a motor gets this hot (C).
+
+  // Mecanum / X-drive with blue or red cartridges: say which, so strafe
+  // distances are measured correctly. (Green motors don't need this.)
+  //   chassis.set_holonomic_cartridge(ratio6_1);
+
+  // Live PID tuner. While this is on, the controller buttons tune PID instead
+  // of running your bindings. See docs/GUIDE.md. Turn it off for competition!
+  hh::tuner::enabled = false;
 
   // Mechanism settings and buttons go here. Examples:
   //   intake.bind_hold(Controller.ButtonR1, Controller.ButtonR2);
