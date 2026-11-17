@@ -2,8 +2,12 @@
 
 JAR-Template runs on the VEX API (`vex.h`). EZ-Template runs on PROS
 (`pros::` API), so its code can't be copied in. Its features get rebuilt here
-on top of JAR's classes. Nothing below is written yet; this list is the plan to
-agree on before coding.
+on top of JAR's classes.
+
+**Done in v0.1:** single commented config file, `hh::Spinner`, `hh::Positioner`
+and `hh::Pneumatic` (easy layer), button bindings (`bind_hold`, `bind_press`,
+`bind_toggle`), named auton list, example auton, getting-started guide and
+chassis recipes. Everything else below is still to come.
 
 ## Design goals (from Henry)
 

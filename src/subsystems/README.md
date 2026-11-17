@@ -1,6 +1,8 @@
 # src/subsystems
 
-One `.cpp` per mechanism on the robot, e.g. `intake.cpp` with `intake.h` in
-`include/subsystems/`. Each subsystem owns its motors/pistons and exposes simple
-functions (`intake_spin()`, `clamp_toggle()`) that autons and driver control call.
-Files here are picked up by the makefile automatically.
+Most mechanisms don't need any code here. Set them up as `hh::Spinner`,
+`hh::Positioner` or `hh::Pneumatic` blocks in `src/robot-config.cpp`.
+
+This folder is for anything the blocks can't do, like color sorting or a
+mechanism with its own special logic. Put the `.cpp` here and its header in
+`include/subsystems/`. Files here are built automatically.
