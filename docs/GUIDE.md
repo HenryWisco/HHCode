@@ -1,7 +1,9 @@
 # HHCode Guide
 
-How to set up your robot and use the HHCode features. Do [SETUP.md](SETUP.md)
-first. For autonomous driving functions (`drive_distance`, `turn_to_angle`,
+Every HHCode feature and setting. New here? Do [SETUP.md](SETUP.md), then the
+[GETTING-STARTED.md](GETTING-STARTED.md) walkthrough, and come back to this
+when you want more. Ready-made chassis setups are in
+[CONFIG-RECIPES.md](CONFIG-RECIPES.md). For autonomous driving functions (`drive_distance`, `turn_to_angle`,
 odometry) see the [JAR-Template docs](https://jacksonarearobotics.github.io/JAR-Template/).
 
 ## Where things go
@@ -70,6 +72,10 @@ line in `robot-config.h`, and its buttons in `configure_robot()`.
 
 > Don't name anything `clamp`. JAR-Template already uses that name. Use
 > `mogo_clamp` or similar.
+
+> Keep section 3 (mechanisms) below section 2 (the chassis) in
+> `robot-config.cpp`. The chassis sets up three-wire ports for tracking wheels,
+> and a piston declared before it can lose its port.
 
 ### Spinner: intakes, rollers, conveyors
 

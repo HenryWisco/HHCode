@@ -5,15 +5,17 @@ Robotics extension**. It starts from [JAR-Template](https://jacksonarearobotics.
 (v1.2.0) and adds the best parts of [EZ-Template](https://ez-robotics.github.io/EZ-Template/),
 plus our own custom features.
 
-> **Status:** in progress. The features in the roadmap are written and compile,
-> but have not been tested on a robot yet. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status:** in progress. The features in the roadmap are written, build, and
+> pass the PC simulator tests, but have not been run on a robot yet. See
+> [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Quick start (students)
 
 1. Follow [docs/SETUP.md](docs/SETUP.md) once per computer.
-2. Get your team's copy of this repo (your coach will tell you how) and open it in VS Code.
-3. Follow [docs/GUIDE.md](docs/GUIDE.md): your motors, drivetrain, mechanisms and
-   buttons all go in `src/robot-config.cpp`.
+2. Open your team's copy of this folder in VS Code (**File → Open Folder**).
+3. Follow [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) to set up your
+   robot, buttons and first auton. Everything about your robot goes in
+   `src/robot-config.cpp`.
 4. Click **Build**, then **Download** in the VEX bar at the bottom of VS Code.
 
 ## Folder layout
@@ -35,7 +37,8 @@ src/
   robot-config.cpp       Everything about your robot: ports, chassis, mechanisms, buttons
   main.cpp               Start-up, autonomous and driver control (rarely edited)
 vex/                     VEX build scripts (don't edit)
-docs/                    Setup guide, roadmap, credits
+tests/                   PC simulator and tests for the library (not part of the robot program)
+docs/                    Guides, roadmap, credits
 makefile                 Build file used by the VEX extension
 ```
 
@@ -44,8 +47,11 @@ template repo so every team gets the same fixes.
 
 ## Docs
 
-- [Student setup guide](docs/SETUP.md)
-- [Guide: setting up your robot and using the features](docs/GUIDE.md)
+- [Student setup guide](docs/SETUP.md): installing VS Code and the VEX extension
+- [Getting started](docs/GETTING-STARTED.md): configure your robot, buttons and first auton
+- [Chassis recipes](docs/CONFIG-RECIPES.md): copy-paste setups for tank, mecanum and X-drive
+- [Guide](docs/GUIDE.md): every feature and setting
 - [Roadmap: what we're adding from EZ-Template](docs/ROADMAP.md)
+- [Spec and status table](docs/SPEC.md) and [tests](tests/README.md), for maintainers
 - [Credits and licenses](docs/CREDITS.md)
 - JAR-Template docs: https://jacksonarearobotics.github.io/JAR-Template/

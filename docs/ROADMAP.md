@@ -29,8 +29,16 @@ Everything above passes the PC simulator tests in `tests/` (164 scenarios on
 tank, tank with odometry, mecanum and X-drive robots; see `tests/README.md`).
 The simulator checks logic, not hardware, so the robot test still matters.
 
-Not started:
+Not started (details in [SPEC.md](SPEC.md)):
 
+- Red/blue mirrored autons
+- `hh::Chassis` wrapper: set up the chassis in one call with signed ports
+- Separate forward/backward constants; turn direction (shortest/left/right)
+- Path smoothing for `follow_path`
+- Brain screens: odom map, motor temperatures, unplugged ports
+- PTO
+- Update script (replace the library folders, keep team files)
+- Running the simulator tests automatically on GitHub
 - Henry's custom features (below)
 
 ## Design goals (from Henry)
