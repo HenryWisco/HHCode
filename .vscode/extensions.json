@@ -1,0 +1,11 @@
+{
+	// VS Code shows a "Install recommended extensions?" popup when a student opens this folder.
+	"recommendations": [
+		"VEXRobotics.vexcode",
+		"ms-vscode.cpptools"
+	],
+	// The PROS extension fights the VEX extension over build/upload. Keep it disabled in this workspace.
+	"unwantedRecommendations": [
+		"sigbots.pros"
+	]
+}

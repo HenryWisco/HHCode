@@ -1,0 +1,16 @@
+# Build output from the VEX extension
+/build/
+/bin/
+compile_commands.json
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+*.swp
+
+# Keep the shared VS Code config, ignore personal files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/c_cpp_properties.json
+!.vscode/vex_project_settings.json
