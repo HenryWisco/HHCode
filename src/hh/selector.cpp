@@ -63,6 +63,11 @@ void previous() {
 void run_selected() {
   if (total == 0) return;
   autons[current].routine();
+  // Motions leave the last bit of PID power on the motors so the next one can
+  // take over smoothly. After the final one, that would make the robot creep
+  // for the rest of autonomous, so stop the drive here.
+  chassis.wait();
+  chassis.drive_stop(vex::brakeType::brake);
 }
 
 // Prints `text` on up to `max_lines` lines, breaking at spaces.

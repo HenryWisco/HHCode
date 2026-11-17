@@ -377,7 +377,7 @@ TEST(tuner_adjusts_runs_and_stops) {
 
   sim::tap("A");                       // runs Drive Test
   sim::run(500);
-  CHECK(speed() > 5);
+  CHECK(distance_to(0, 0) > 2);
   CHECK(contains(sim::controller_line(3), "RUNNING"));
   sim::set_axis(3, -100);              // sticks are ignored during a run
   sim::run(200);
@@ -898,9 +898,10 @@ TEST(follow_path_single_point_and_empty_path) {
   CHECK(distance_to(0, 20) < 4);
   chassis.async().follow_path({});      // nothing to do, and must not leave async() armed
   CHECK(!chassis.is_moving());
-  chassis.drive_distance(6);
+  double from = robot.y;
+  chassis.drive_distance(6);            // so this must block until it has driven
   CHECK(!chassis.is_moving());
-  CHECK(speed() < 2);
+  CHECK(robot.y - from > 3);
 }
 
 TEST(chained_point_to_point) {

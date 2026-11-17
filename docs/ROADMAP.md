@@ -23,9 +23,9 @@ Written and compiling, **not yet tested on a robot**:
 - Pure pursuit path following (`follow_path`)
 - Live PID tuner on the controller
 
-Written, **not yet run** (needs a C++ compiler on the PC):
-
-- PC simulator and test scenarios in `tests/` (see `tests/README.md`)
+Everything above passes the PC simulator tests in `tests/` (148 scenarios on
+tank, tank with odometry, mecanum and X-drive robots; see `tests/README.md`).
+The simulator checks logic, not hardware, so the robot test still matters.
 
 Not started:
 

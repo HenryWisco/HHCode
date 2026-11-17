@@ -26,6 +26,15 @@ sh tests/run.sh          # Linux, macOS, Git Bash
 .\tests\run.ps1          # Windows PowerShell
 ```
 
+On Windows without a compiler, the Zig compiler installs into this folder
+with Python and nothing else (delete `tests/.venv` to remove it):
+
+```
+python -m venv tests\.venv
+tests\.venv\Scripts\python.exe -m pip install ziglang
+.\tests\run.ps1 -Compiler "tests\.venv\Scripts\python.exe -m ziglang c++"
+```
+
 Each robot prints its tests and a pass count. A failure shows the line in
 `tests.cpp` and the value it got.
 
