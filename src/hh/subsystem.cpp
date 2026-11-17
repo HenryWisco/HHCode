@@ -65,6 +65,7 @@ static int background_task() {
       }
     }
     driver::check_overheat();
+    ports::check();
     vex::task::sleep(10);
   }
   return 0;
@@ -96,6 +97,7 @@ void init() {
   }
   driver::load_saved_curves();
   static vex::task background(background_task);
+  ports::start();
   selector::start();
   graph::start();
 }

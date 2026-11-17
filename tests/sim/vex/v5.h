@@ -10,6 +10,26 @@
 #include <cstdlib>
 #include <vector>
 
+// The small part of the C API that HHCode uses to see what is plugged in.
+#define V5_MAX_DEVICE_PORTS 32
+typedef enum {
+  kDeviceTypeNoSensor = 0,
+  kDeviceTypeMotorSensor = 2,
+  kDeviceTypeAbsEncSensor = 4,
+  kDeviceTypeImuSensor = 6,
+  kDeviceTypeDistanceSensor = 7,
+  kDeviceTypeRadioSensor = 8,
+  kDeviceTypeVisionSensor = 11,
+  kDeviceTypeAdiSensor = 12,
+  kDeviceTypeOpticalSensor = 16,
+  kDeviceTypeGpsSensor = 20,
+  kDeviceTypeAiVisionSensor = 29
+} V5_DeviceType;
+typedef struct _V5_Device* V5_DeviceT;
+int32_t vexDeviceGetStatus(V5_DeviceType* buffer);
+V5_DeviceT vexDeviceGetByIndex(uint32_t index);
+double vexDeviceMotorTemperatureGet(V5_DeviceT device);
+
 namespace vex {
 
 enum class percentUnits { pct = 0 };

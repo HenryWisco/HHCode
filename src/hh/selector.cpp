@@ -124,7 +124,10 @@ static void draw_screen() {
   Brain.Screen.drawRectangle(0, 0, 480, 32);
   Brain.Screen.setPenColor(vex::color::white);
   Brain.Screen.setFont(vex::fontType::mono20);
-  Brain.Screen.printAt(10, 22, true, "HHCode  %s", Brain.SDcard.isInserted() ? "SD" : "no SD");
+  // Tapping this bar opens the ports page. A missing inertial sensor is the
+  // most common reason autons go wrong, so it is called out here.
+  Brain.Screen.printAt(10, 22, true, "Ports >  %s  %s", Brain.SDcard.isInserted() ? "SD" : "no SD",
+                       chassis.Gyro.installed() ? "" : "NO IMU!");
   draw_status();
 
   // Chosen auton
@@ -171,6 +174,7 @@ static int selector_task() {
   int shown = -1;
   bool was_running_auton = false;
   bool was_touching = false;
+  bool showing_ports = false;
   bool was_left = false;
   bool was_right = false;
   uint32_t last_status = 0;
@@ -200,10 +204,31 @@ static int selector_task() {
 
     if (show_on_brain) {
       bool touching = Brain.Screen.pressing();
-      if (touching && !was_touching) {
+      bool tapped = touching && !was_touching;
+      was_touching = touching;
+
+      // The ports page: opened by tapping the title bar, closed by any tap.
+      if (showing_ports) {
+        if (tapped) {
+          showing_ports = false;
+          shown = -1;
+        } else if (now_ms() - last_status > 500) {
+          last_status = now_ms();
+          ports::draw();
+        }
+        if (showing_ports) {
+          vex::task::sleep(20);
+          continue;
+        }
+      } else if (tapped) {
+        if (Brain.Screen.yPosition() < 36) {
+          showing_ports = true;
+          last_status = 0;
+          vex::task::sleep(20);
+          continue;
+        }
         if (Brain.Screen.xPosition() < 240) previous(); else next();
       }
-      was_touching = touching;
     }
 
     if (use_controller && disabled_by_field) {

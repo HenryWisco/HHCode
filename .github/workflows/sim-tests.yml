@@ -1,0 +1,15 @@
+# Builds the library against the simulator and runs every test scenario on
+# each push. See tests/README.md.
+name: Simulator tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  sim:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run the simulator tests
+        run: sh tests/run.sh

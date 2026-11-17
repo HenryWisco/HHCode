@@ -38,6 +38,9 @@ tests\.venv\Scripts\python.exe -m pip install ziglang
 Each robot prints its tests and a pass count. A failure shows the line in
 `tests.cpp` and the value it got.
 
+GitHub also runs them on every push (`.github/workflows/sim-tests.yml`); the
+result shows as a green tick or red cross next to the commit.
+
 ## Limits
 
 The simulator checks logic: signs, units, state machines, task handling, exit

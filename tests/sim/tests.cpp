@@ -399,6 +399,48 @@ TEST(tuner_adjusts_runs_and_stops) {
   CHECK(robot.forward_speed > 20);
 }
 
+TEST(ports_page_and_unplugged_warning) {
+  sim::devices[vex::PORT1] = kDeviceTypeMotorSensor;
+  sim::devices[vex::PORT5] = kDeviceTypeMotorSensor;
+  sim::devices[vex::PORT10] = kDeviceTypeImuSensor;
+  sim::motor(vex::PORT5).temperature = 61;
+  boot();
+  CHECK(sim::brain_shows("Ports >"));
+  CHECK(!sim::brain_shows("NO IMU!"));
+
+  sim::tap_screen(100, 15);              // the title bar opens the ports page
+  sim::run(600);
+  CHECK(sim::brain_shows("tap to go back"));
+  CHECK(sim::brain_shows("IMU"));
+  CHECK(sim::brain_shows("61C"));
+  CHECK(strcmp(hh::selector::selected_name(), "Drive Test") == 0);
+  CHECK(strcmp(hh::ports::name(10), "IMU") == 0);
+  CHECK(strcmp(hh::ports::name(7), "") == 0);
+  CHECK_NEAR(hh::ports::temperature(5), 61, 0.01);
+  CHECK(!hh::ports::lost(1));
+
+  int rumbles = sim::rumbles();
+  sim::devices[vex::PORT1] = kDeviceTypeNoSensor;   // a cable comes out
+  sim::run(700);
+  CHECK(sim::rumbles() == rumbles + 1);
+  CHECK(contains(sim::controller_line(3), "PORT 1 UNPLUGGED"));
+  CHECK(hh::ports::lost(1));
+  CHECK(sim::brain_shows("LOST"));
+  sim::run(3000);
+  CHECK(sim::rumbles() == rumbles + 1);  // one warning, not one every second
+
+  sim::tap_screen(300, 120);             // any tap goes back, without changing the auton
+  sim::run(200);
+  CHECK(sim::brain_shows("Auton 1 of"));
+  CHECK(strcmp(hh::selector::selected_name(), "Drive Test") == 0);
+}
+
+TEST(missing_inertial_sensor_is_flagged) {
+  sim::imu_installed = false;
+  boot();
+  CHECK(sim::brain_shows("NO IMU!"));
+}
+
 TEST(forced_turn_direction) {
   boot_for_auton();
   chassis.clockwise().turn_to_angle(270);        // the short way would be 90 left
