@@ -8,6 +8,9 @@ cd "$(dirname "$0")/.."
 CXX="${CXX:-g++}"
 mkdir -p build/sim
 
+# Windows (Git Bash) can only run programs whose names end in .exe.
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) exe=.exe ;; *) exe= ;; esac
+
 # On GitHub, failures are also written as annotations so they show on the
 # run's summary page.
 annotate() {
@@ -24,14 +27,14 @@ for config in 1 2 3 4; do
   if ! $CXX -std=gnu++17 -O1 -pthread -fpermissive -w -Dmain=robot_main -DSIM_CONFIG=$config \
       -Itests/sim/vex -Itests/sim -Iinclude \
       src/JAR-Template/*.cpp src/hh/*.cpp src/autons/*.cpp src/main.cpp tests/sim/*.cpp \
-      -o build/sim/sim$config > build/sim/build$config.log 2>&1; then
+      -o build/sim/sim$config$exe > build/sim/build$config.log 2>&1; then
     cat build/sim/build$config.log
     annotate 'error' build/sim/build$config.log
     status=1
     continue
   fi
   echo "=== Robot $config: running"
-  ./build/sim/sim$config > build/sim/run$config.log 2>&1 || status=1
+  ./build/sim/sim$config$exe > build/sim/run$config.log 2>&1 || status=1
   cat build/sim/run$config.log
   annotate 'FAIL line|SIM|No test' build/sim/run$config.log
 done
