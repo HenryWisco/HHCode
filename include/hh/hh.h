@@ -7,6 +7,8 @@
 #include "hh/spinner.h"
 #include "hh/positioner.h"
 #include "hh/velocity.h"
+#include "hh/color_sorter.h"
+#include "hh/graph.h"
 #include "hh/driver.h"
 #include "hh/selector.h"
 #include "hh/tuner.h"

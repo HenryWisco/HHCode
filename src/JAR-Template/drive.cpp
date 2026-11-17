@@ -294,6 +294,7 @@ void Drive::turn_to_angle(float angle, float turn_max_voltage, float turn_settle
     previous_output = output;
     if (check_stall(output)) { break; }
     drive_with_voltage(output, -output);
+    hh::graph::record(error, output);   // HHCode
     task::sleep(10);
   }
 }
@@ -351,6 +352,7 @@ void Drive::drive_distance(float distance, float heading, float drive_max_voltag
     if (check_stall(drive_output)) { break; }
 
     drive_with_voltage(drive_output+heading_output, drive_output-heading_output);
+    hh::graph::record(drive_error, drive_output);   // HHCode
     task::sleep(10);
   }
 }
@@ -379,6 +381,7 @@ void Drive::left_swing_to_angle(float angle, float swing_max_voltage, float swin
     output = clamp(output, -turn_max_voltage, turn_max_voltage);
     DriveL.spin(fwd, output, volt);
     DriveR.stop(hold);
+    hh::graph::record(error, output);   // HHCode
     task::sleep(10);
   }
 }
@@ -399,6 +402,7 @@ void Drive::right_swing_to_angle(float angle, float swing_max_voltage, float swi
     output = clamp(output, -turn_max_voltage, turn_max_voltage);
     DriveR.spin(reverse, output, volt);
     DriveL.stop(hold);
+    hh::graph::record(error, output);   // HHCode
     task::sleep(10);
   }
 }
@@ -565,6 +569,7 @@ void Drive::drive_to_point(float X_position, float Y_position, float drive_min_v
     drive_output = clamp_min_voltage(drive_output, drive_min_voltage);
 
     drive_with_voltage(left_voltage_scaling(drive_output, heading_output), right_voltage_scaling(drive_output, heading_output));
+    hh::graph::record(drive_error, drive_output);   // HHCode
     task::sleep(10);
   }
 }
@@ -659,6 +664,7 @@ void Drive::drive_to_pose(float X_position, float Y_position, float angle, float
     drive_output = clamp_min_voltage(drive_output, drive_min_voltage);
 
     drive_with_voltage(left_voltage_scaling(drive_output, heading_output), right_voltage_scaling(drive_output, heading_output));
+    hh::graph::record(drive_error, drive_output);   // HHCode
     task::sleep(10);
   }
 }
@@ -702,6 +708,7 @@ void Drive::turn_to_point(float X_position, float Y_position, float extra_angle_
     previous_output = output;
     if (check_stall(output)) { break; }
     drive_with_voltage(output, -output);
+    hh::graph::record(error, output);   // HHCode
     task::sleep(10);
   }
 }
@@ -767,6 +774,7 @@ void Drive::holonomic_drive_to_pose(float X_position, float Y_position, float an
     DriveLB.spin(fwd, drive_output*cos(-to_rad(get_absolute_heading()) - heading_error + 3*M_PI/4) + turn_output, volt);
     DriveRB.spin(fwd, drive_output*cos(to_rad(get_absolute_heading()) + heading_error - M_PI/4) - turn_output, volt);
     DriveRF.spin(fwd, drive_output*cos(-to_rad(get_absolute_heading()) - heading_error + 3*M_PI/4) - turn_output, volt);
+    hh::graph::record(drive_error, drive_output);   // HHCode
     task::sleep(10);
   }
 }
@@ -894,6 +902,8 @@ bool Drive::begin_motion(motion_kind kind, std::function<void()> motion){
     }
   }
   record_progress_start(kind);
+  hh::graph::begin(kind == MOTION_TURN ? "Turn" : (kind == MOTION_STRAFE ? "Strafe" : (kind == MOTION_ODOM ? "Odom drive" : "Drive")),
+                   kind == MOTION_TURN ? "deg" : "in");
   stall_ms = 0;
   interfered = false;
   return(false);
@@ -1063,6 +1073,7 @@ void Drive::strafe_distance(float distance, float heading, float drive_max_volta
     DriveRF.spin(fwd, -drive_output-heading_output, volt);
     DriveLB.spin(fwd, -drive_output+heading_output, volt);
     DriveRB.spin(fwd, drive_output-heading_output, volt);
+    hh::graph::record(drive_error, drive_output);   // HHCode
     task::sleep(10);
   }
 }
@@ -1184,6 +1195,7 @@ void Drive::follow_path(std::vector<path_point> path, float lookahead, bool back
     drive_output = clamp_min_voltage(drive_output, drive_min_voltage);
 
     drive_with_voltage(left_voltage_scaling(drive_output, heading_output), right_voltage_scaling(drive_output, heading_output));
+    hh::graph::record(drive_error, drive_output);   // HHCode
     task::sleep(10);
   }
 }

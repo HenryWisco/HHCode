@@ -22,15 +22,15 @@ Written and compiling, **not yet tested on a robot**:
   correction, encoder-only odometry (`HOLONOMIC_ZERO_TRACKER_ODOM`)
 - Pure pursuit path following (`follow_path`)
 - Live PID tuner on the controller
+- PID graph on the Brain screen (`hh::graph`)
+- `hh::ColorSorter`: optical-sensor color sorting with a piston or the intake
 
-Everything above passes the PC simulator tests in `tests/` (148 scenarios on
+Everything above passes the PC simulator tests in `tests/` (164 scenarios on
 tank, tank with odometry, mecanum and X-drive robots; see `tests/README.md`).
 The simulator checks logic, not hardware, so the robot test still matters.
 
 Not started:
 
-- Color sorting helper
-- PID graphing on the Brain screen
 - Henry's custom features (below)
 
 ## Design goals (from Henry)

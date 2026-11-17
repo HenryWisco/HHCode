@@ -399,9 +399,60 @@ TEST(tuner_adjusts_runs_and_stops) {
   CHECK(robot.forward_speed > 20);
 }
 
+TEST(graph_draws_the_latest_motion) {
+  boot_for_auton();
+  hh::graph::enabled = true;
+  CHECK(!hh::graph::owns_screen());
+  chassis.turn_to_angle(90);
+  double heading_at_end = heading_off(90);
+  sim::run(400);
+  CHECK(hh::graph::owns_screen());
+  CHECK(sim::brain_shows("Turn"));
+  CHECK(sim::brain_shows("tap for autons"));
+  CHECK(sim::brain_lines() > 20);       // -1 would mean something was drawn off the screen
+  CHECK_NEAR(hh::graph::start_error(), 90, 1);
+  CHECK_NEAR(hh::graph::final_error(), -heading_at_end, 0.5);
+  CHECK(hh::graph::duration_ms() > 300 && hh::graph::duration_ms() < 3000);
+  CHECK(hh::graph::overshoot() >= 0 && hh::graph::overshoot() < 10);
+
+  chassis.drive_distance(12);           // a new motion replaces the graph
+  sim::run(400);
+  CHECK(sim::brain_shows("Drive"));
+  CHECK_NEAR(hh::graph::start_error(), 12, 0.5);
+
+  sim::set_mode(sim::DISABLED);
+  sim::tap_screen(400, 120);            // a tap gives the screen back to the selector...
+  sim::run(200);
+  CHECK(!hh::graph::owns_screen());
+  CHECK(sim::brain_shows("Auton 1 of"));
+  CHECK(strcmp(hh::selector::selected_name(), "Drive Test") == 0);   // ...without changing the auton
+}
+
+TEST(graph_fits_a_long_motion) {
+  boot_for_auton();
+  hh::graph::enabled = true;
+  robot.blocked = true;
+  chassis.drive_distance(24);           // runs for the full 5 second timeout
+  sim::run(400);
+  CHECK(hh::graph::samples() > 100 && hh::graph::samples() <= 230);
+  CHECK_NEAR(hh::graph::duration_ms(), 5000, 100);
+  CHECK(sim::brain_lines() > 100);
+  CHECK_NEAR(hh::graph::final_error(), 24, 0.1);
+  CHECK_NEAR(hh::graph::overshoot(), 0, 0.01);
+}
+
+TEST(graph_is_off_by_default) {
+  boot_for_auton();
+  chassis.turn_to_angle(90);
+  sim::run(400);
+  CHECK(!hh::graph::owns_screen());
+  CHECK(hh::graph::samples() == 0);
+  CHECK(sim::brain_lines() == 0);
+}
+
 #if SIM_CONFIG == 1 || SIM_CONFIG == 2
 /*---------------------------------------------------------------------------*/
-/*  Tank drive                                                               */
+/*  Tank drive                                                              */
 /*---------------------------------------------------------------------------*/
 
 TEST(swing_turns) {
@@ -766,6 +817,112 @@ TEST(overheat_warning) {
   CHECK(contains(sim::controller_line(3), "Spinner"));
   sim::run(5000);
   CHECK(sim::rumbles() == 1);          // doesn't nag every second
+}
+
+// A game piece of this hue passes the sensor for `ms`, then there is a gap.
+static void show_piece(double hue, double ms) {
+  sim::optical_hue = hue;
+  sim::optical_near = true;
+  sim::run(ms);
+  sim::optical_near = false;
+  sim::run(300);
+}
+
+TEST(sorter_throws_out_the_wrong_color) {
+  boot_for_auton();
+  CHECK(sim::optical_light);
+  sorter.keep(hh::RED);
+  show_piece(10, 100);                  // red: kept
+  CHECK(sorter.rejected() == 0);
+  CHECK(!sim::digital(2));
+
+  sim::optical_hue = 220;               // blue arrives and sits in front of the sensor
+  sim::optical_near = true;
+  sim::run(60);
+  CHECK(sorter.seen() == hh::BLUE);
+  CHECK(sorter.is_ejecting());
+  CHECK(sim::digital(2));
+  sim::run(400);
+  CHECK(!sim::digital(2));
+  CHECK(sorter.rejected() == 1);        // one eject per piece, however long it stays
+  sim::optical_near = false;
+  sim::run(100);
+
+  show_piece(220, 100);
+  CHECK(sorter.rejected() == 2);
+  sorter.keep(hh::BLUE);                // other alliance
+  show_piece(220, 100);
+  CHECK(sorter.rejected() == 2);
+  show_piece(350, 100);                 // red hue wraps around 0
+  CHECK(sorter.rejected() == 3);
+}
+
+TEST(sorter_ignores_other_colors_and_far_objects) {
+  boot_for_auton();
+  sorter.keep(hh::RED);
+  sim::optical_hue = 220;               // blue, but nothing is close
+  sim::run(300);
+  CHECK(sorter.rejected() == 0);
+  show_piece(100, 200);                 // green
+  CHECK(sorter.rejected() == 0);
+  sim::optical_hue = 220;               // a single flicker of blue is not enough
+  sim::optical_near = true;
+  sim::run(10);
+  sim::optical_near = false;
+  sim::run(300);
+  CHECK(sorter.rejected() == 0);
+  sorter.use_proximity = false;
+  sim::run(100);
+  CHECK(sorter.rejected() == 1);
+}
+
+TEST(sorter_delay_off_and_toggle_button) {
+  boot();
+  sorter.eject_delay = 200;
+  sorter.keep(hh::RED);
+  sim::optical_hue = 220;
+  sim::optical_near = true;
+  sim::run(120);
+  CHECK(!sim::digital(2));              // waiting for the piece to reach the ejector
+  sim::run(150);
+  CHECK(sim::digital(2));
+  sim::run(200);
+  CHECK(!sim::digital(2));
+  sim::optical_near = false;
+  sim::run(100);
+
+  sim::tap("Right");                    // paused from the controller
+  CHECK(!sorter.is_active());
+  show_piece(220, 100);
+  CHECK(sorter.rejected() == 1);
+  sim::tap("Right");
+  CHECK(sorter.is_active());
+  sorter.keep(hh::NO_COLOR);            // or turned off in code
+  show_piece(220, 100);
+  CHECK(sorter.rejected() == 1);
+}
+
+TEST(sorter_ejects_with_the_intake) {
+  boot_for_auton();
+  sorter.eject_with(intake, -100);
+  sorter.keep(hh::RED);
+  intake.spin();
+  sim::run(300);
+  sim::optical_hue = 220;
+  sim::optical_near = true;
+  sim::run(60);
+  CHECK_NEAR(sim::motor(INTAKE_PORT).volts, -12, 0.01);
+  CHECK_NEAR(intake.commanded(), 100, 0.01);   // it still knows what it was asked to do
+  sim::optical_near = false;
+  sim::run(250);
+  CHECK_NEAR(sim::motor(INTAKE_PORT).volts, 12, 0.01);
+  CHECK(!sim::digital(2));
+
+  sim::optical_near = true;             // stopping during an eject really stops
+  sim::run(60);
+  intake.stop();
+  sim::run(300);
+  CHECK(sim::motor(INTAKE_PORT).command == sim::MotorState::STOPPED);
 }
 
 TEST(tuner_pauses_button_bindings) {

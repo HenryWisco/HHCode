@@ -64,6 +64,9 @@ hh::Positioner lift(LiftMotor, 12.0 / 60.0);
 hh::Velocity flywheel(FlywheelMotor, 3600);
 hh::Pneumatic mogo_clamp(Brain.ThreeWirePort.A);
 hh::Pneumatic wing(Brain.ThreeWirePort.B);
+hh::Pneumatic ejector(Brain.ThreeWirePort.C);
+optical RingSensor = optical(PORT14);
+hh::ColorSorter sorter(RingSensor);
 
 int b_presses = 0;
 int y_state = 0;
@@ -83,6 +86,8 @@ void configure_robot() {
   lift.bind_preset(Controller.ButtonDown, "down");
   lift.bind_manual(Controller.ButtonL1, Controller.ButtonLeft);
   flywheel.bind_toggle(Controller.ButtonX, 2400);
+  sorter.eject_with(ejector);
+  sorter.bind_toggle(Controller.ButtonRight);
   hh::on_press(Controller.ButtonB, [] { b_presses++; });
   hh::toggle(Controller.ButtonY, [] { y_state = 1; }, [] { y_state = 2; });
   hh::when([] { return when_flag; }, [] { when_fires++; });

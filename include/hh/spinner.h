@@ -50,6 +50,13 @@ public:
   void reverse(float percent);
   void stop();
 
+  /**
+   * Runs at `percent` for `ms` milliseconds, then goes back to whatever was
+   * asked for before. Doesn't block. Used by hh::ColorSorter to throw a piece out.
+   */
+  void override_for(float percent, int ms);
+  bool is_overridden() const { return override_end_ != 0; }
+
   /** The speed last asked for, in percent. Negative is reverse, 0 is stopped. */
   float commanded() const { return command_; }
   bool is_spinning() const { return command_ != 0; }
@@ -85,6 +92,7 @@ private:
   uint32_t command_start_ = 0;
   uint32_t slow_since_ = 0;
   uint32_t unjam_end_ = 0;
+  uint32_t override_end_ = 0;
   int jam_count_ = 0;
 };
 

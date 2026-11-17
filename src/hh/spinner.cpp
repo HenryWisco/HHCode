@@ -22,7 +22,15 @@ void Spinner::spin(float percent) {
   }
   command_ = percent;
   unjam_end_ = 0;
-  apply(command_);
+  // Stopping always wins. Anything else waits for an override to finish.
+  if (percent == 0) override_end_ = 0;
+  if (override_end_ == 0) apply(command_);
+}
+
+void Spinner::override_for(float percent, int ms) {
+  unjam_end_ = 0;
+  override_end_ = now_ms() + ms;
+  apply(clamp(percent, -100, 100));
 }
 
 void Spinner::spin() { spin(speed); }
@@ -54,8 +62,19 @@ void Spinner::bind_toggle(Button forward) {
 }
 
 void Spinner::update() {
-  if (!jam_protection) return;
   uint32_t now = now_ms();
+
+  // Finish an override, then go back to what was asked for.
+  if (override_end_ != 0) {
+    if (now >= override_end_) {
+      override_end_ = 0;
+      command_start_ = now;
+      slow_since_ = 0;
+      apply(command_);
+    }
+    return;
+  }
+  if (!jam_protection) return;
 
   // Finish backing out, then go back to what was asked for.
   if (unjam_end_ != 0) {

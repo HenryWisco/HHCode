@@ -97,6 +97,7 @@ void init() {
   driver::load_saved_curves();
   static vex::task background(background_task);
   selector::start();
+  graph::start();
 }
 
 }  // namespace hh

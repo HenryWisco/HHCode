@@ -24,6 +24,7 @@ enum class brakeType { coast, brake, hold };
 enum class gearSetting { ratio36_1, ratio18_1, ratio6_1 };
 enum class fontType { mono20 = 0, mono30, mono40, mono60, prop20, prop30, prop40, prop60, mono15, mono12 };
 enum class controllerType { primary, partner };
+enum class ledState { off, on };
 
 constexpr percentUnits percent = percentUnits::pct;
 constexpr percentUnits pct = percentUnits::pct;
@@ -172,6 +173,18 @@ public:
   void resetPosition() { setPosition(0, rotationUnits::deg); }
 };
 
+class optical {
+  int32_t _index;
+
+public:
+  optical(int32_t index, bool enableGesture = false) : _index(index) { (void)enableGesture; }
+  bool installed() { return true; }
+  double hue();
+  bool isNearObject();
+  void setLight(ledState state);
+  void setLightPower(int32_t intensity, percentUnits units = percentUnits::pct);
+};
+
 class triport {
   int32_t _index;
 
@@ -226,6 +239,8 @@ public:
     void setFillColor(const color& c);
     void setPenColor(const color& c);
     void drawRectangle(int x, int y, int width, int height);
+    void drawLine(int x1, int y1, int x2, int y2);
+    void setPenWidth(uint32_t width);
     void printAt(int32_t x, int32_t y, const char* format, ...);
     void printAt(int32_t x, int32_t y, bool opaque, const char* format, ...);
     bool pressing();

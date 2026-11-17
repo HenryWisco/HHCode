@@ -55,6 +55,12 @@ struct Robot {
 extern Robot robot;
 extern bool sd_inserted;
 extern bool imu_installed;
+// The optical sensor: what is in front of it, and whether its light is on.
+extern double optical_hue;
+extern bool optical_near;
+extern bool optical_light;
+/** How many line segments have been drawn on the Brain since it was last cleared. */
+int brain_lines();
 std::map<std::string, std::string>& sd_files();
 MotorState& motor(int port);
 

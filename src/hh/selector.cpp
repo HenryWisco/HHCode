@@ -170,13 +170,21 @@ static int selector_task() {
 
     if (running_auton) {
       // Leave the screen to the auton so it can print its own information.
-      if (!was_running_auton && show_on_brain) Brain.Screen.clearScreen();
+      if (!was_running_auton && show_on_brain && !graph::owns_screen()) Brain.Screen.clearScreen();
       was_running_auton = true;
       shown = -1;
       vex::task::sleep(50);
       continue;
     }
     was_running_auton = false;
+
+    // The PID graph borrows the screen until it is tapped.
+    if (graph::owns_screen()) {
+      shown = -1;
+      was_touching = false;
+      vex::task::sleep(50);
+      continue;
+    }
 
     if (show_on_brain) {
       bool touching = Brain.Screen.pressing();

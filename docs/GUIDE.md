@@ -134,6 +134,38 @@ In an auton: `mogo_clamp.extend();`, `.retract();`, `.toggle();`,
 solenoids together. `true` as the last argument starts it extended.
 `mogo_clamp.reversed = true;` swaps extend and retract.
 
+### ColorSorter: throw out the other alliance's pieces
+
+Needs an optical sensor that looks at the pieces as they go through the robot.
+
+```cpp
+// section 1
+optical RingSensor = optical(PORT7);
+// section 3
+hh::ColorSorter sorter(RingSensor);
+// configure_robot(): how to throw a piece out. Pick one.
+sorter.eject_with(ejector);          // a piston (hh::Pneumatic) pops out
+sorter.eject_with(intake, -100);     // or the intake runs backwards (0 = just stops)
+```
+
+Then say which color to keep, at the start of each auton or wherever you know
+your alliance: `sorter.keep(hh::RED);` (blue gets thrown out), `hh::BLUE`, or
+`hh::NO_COLOR` to turn sorting off. It stays set for driver control.
+`sorter.bind_toggle(Controller.ButtonRight);` lets the driver pause it.
+
+Tuning:
+
+| Setting | What it does |
+|---|---|
+| `eject_delay` | ms from seeing the piece to throwing it out: how long the piece takes to travel from the sensor to the ejector. Default 0. |
+| `eject_time` | ms the piston stays out or the intake runs backwards. Default 150. |
+| `red_hue_min/max`, `blue_hue_min/max` | The hues that count as each color. Print `RingSensor.hue()` with a piece in front of the sensor if it gets them wrong. |
+| `use_proximity` | `true` only trusts the color when something is close to the sensor. |
+| `light_power` | Sensor light, 0 to 100. Keep it on; it makes colors far more reliable. |
+
+`sorter.rejected()` counts the pieces thrown out, and `sorter.seen()` is what
+the sensor sees right now.
+
 ### Buttons
 
 The `bind_...` functions cover most robots. For anything else:
@@ -258,6 +290,23 @@ The sticks still drive so you can reset the robot. Changes are lost when the
 program restarts, so press X and copy them into `constants.cpp`. Autons that
 call `default_constants()` or `odom_constants()` themselves will undo your
 changes. **Turn the tuner off for competition.**
+
+### Seeing what the PID is doing
+
+Set `hh::graph::enabled = true;` in `configure_robot()` as well. Every chassis
+motion is then drawn on the Brain screen as it runs:
+
+- **Green line:** the error, the distance or angle still to go. It should drop
+  to the grey zero line and stay there. Dipping below it and coming back is
+  overshoot (lower kP or raise kD). Creeping in slowly is the opposite. A
+  wiggle that doesn't die out means kD or kP is too high.
+- **Orange line:** the voltage sent to the motors, from -12 to 12.
+- **Top of the screen:** how long the motion took, the error it started with,
+  how far it overshot, and the error it ended with.
+
+The graph shows the most recent motion, so tune with an auton that does one
+motion at a time. Tap the screen to get the auton list back. **Turn the graph
+off for competition.**
 
 **Picking an auton:** tap the left or right half of the Brain screen. When the
 robot is plugged into a competition switch or the field and disabled, the

@@ -18,6 +18,8 @@ extern hh::Positioner lift;
 extern hh::Velocity flywheel;
 extern hh::Pneumatic mogo_clamp;
 extern hh::Pneumatic wing;
+extern hh::Pneumatic ejector;
+extern hh::ColorSorter sorter;
 extern int b_presses;
 extern int y_state;
 extern bool when_flag;

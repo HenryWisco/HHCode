@@ -135,6 +135,7 @@ PORT3,     -PORT4,
 /*    hh::Positioner lift(LiftMotor, 12.0 / 60.0);                           */
 /*    hh::Velocity   flywheel(FlywheelMotor, 3600);                          */
 /*    hh::Pneumatic  mogo_clamp(Brain.ThreeWirePort.A);                      */
+/*    hh::ColorSorter sorter(RingSensor);                                    */
 /*---------------------------------------------------------------------------*/
 
 // Add your mechanisms here:
@@ -172,6 +173,9 @@ void configure_robot() {
   // Live PID tuner. While this is on, the controller buttons tune PID instead
   // of running your bindings. See docs/GUIDE.md. Turn it off for competition!
   hh::tuner::enabled = false;
+  // PID graph: draws each chassis motion on the Brain screen. Handy with the
+  // tuner. Tap the screen to get the auton list back. Off for competition!
+  hh::graph::enabled = false;
 
   // Mechanism settings and buttons go here. Examples:
   //   intake.bind_hold(Controller.ButtonR1, Controller.ButtonR2);

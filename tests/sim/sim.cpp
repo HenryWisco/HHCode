@@ -160,6 +160,12 @@ void run(double ms) { sleep_ms(ms); }
 Robot robot;
 bool sd_inserted = true;
 bool imu_installed = true;
+double optical_hue = 100;
+bool optical_near = false;
+bool optical_light = false;
+static int brain_line_total = 0;
+static bool brain_line_off_screen = false;
+int brain_lines() { return brain_line_off_screen ? -1 : brain_line_total; }
 
 static MotorState motors[22];
 static Mode current_mode = DRIVER;
@@ -561,7 +567,25 @@ int32_t digital_out::value() { return sim::digital_outputs[_id] ? 1 : 0; }
 
 // ---- brain ----
 
-void brain::lcd::clearScreen() { sim::brain_text.clear(); }
+void brain::lcd::clearScreen() {
+  sim::brain_text.clear();
+  sim::brain_line_total = 0;
+}
+
+void brain::lcd::drawLine(int x1, int y1, int x2, int y2) {
+  sim::brain_line_total++;
+  // The Brain screen is 480 x 240. Drawing outside it means a scaling bug.
+  if (x1 < 0 || x1 > 479 || x2 < 0 || x2 > 479 || y1 < 0 || y1 > 239 || y2 < 0 || y2 > 239) {
+    sim::brain_line_off_screen = true;
+  }
+}
+
+void brain::lcd::setPenWidth(uint32_t) {}
+
+double optical::hue() { return sim::optical_hue; }
+bool optical::isNearObject() { return sim::optical_near; }
+void optical::setLight(ledState state) { sim::optical_light = state == ledState::on; }
+void optical::setLightPower(int32_t, percentUnits) {}
 void brain::lcd::setFont(fontType) {}
 void brain::lcd::setFillColor(const color&) {}
 void brain::lcd::setPenColor(const color&) {}
