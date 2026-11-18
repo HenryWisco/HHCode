@@ -36,6 +36,17 @@ In `src/robot-config.cpp`:
    port 1: `-PORT1` can't be told apart from `PORT1`.
 3. **Section 4:** pick `drive_type` and `style`.
 
+**The short way.** Steps 1 and 2 can be one line instead. Replace the whole
+`Drive chassis( ... );` block with:
+
+```cpp
+Drive chassis = hh::Chassis::tank({1, -2, 3}, {-4, 5, -6}, 10, 3.25, ratio6_1, 450);
+```
+
+Left ports, right ports (minus = reversed), inertial port, wheel diameter,
+cartridge, wheel rpm. There are `mecanum` and `x_drive` versions and add-ons
+for tracking wheels: see [CONFIG-RECIPES.md](CONFIG-RECIPES.md).
+
 Build, download, and drive. If the robot goes the wrong way, flip `true`/`false`
 on the motor that's backwards.
 
@@ -139,6 +150,40 @@ In an auton: `mogo_clamp.extend();`, `.retract();`, `.toggle();`,
 `.pulse(200);` (out, then back in after 200 ms). A second port fires two
 solenoids together. `true` as the last argument starts it extended.
 `mogo_clamp.reversed = true;` swaps extend and retract.
+
+### Pto: drive motors that can switch to a mechanism
+
+A PTO (power take-off) is a piston that shifts some drive motors over to a
+hang or lift. Tank drives only.
+
+```cpp
+// Section 1: the PTO motors. Leave them OUT of the chassis's motor groups.
+motor LeftPto = motor(PORT5, ratio6_1, true);
+motor RightPto = motor(PORT6, ratio6_1, false);
+
+// Section 3
+hh::Pneumatic pto_piston(Brain.ThreeWirePort.D);
+hh::Spinner hang(LeftPto, RightPto);
+hh::Pto pto(LeftPto, RightPto);
+
+// configure_robot()
+pto.use_piston(pto_piston);          // piston extended = motors on the drive
+pto.controls(hang);                  // hang only runs while the PTO is on it
+pto.bind_toggle(Controller.ButtonX);
+```
+
+While the PTO is on the drive, its motors do whatever their side of the drive
+does, in driver control and in every chassis motion, and the mechanism ignores
+its buttons and commands. In an auton: `pto.to_mechanism();`, `pto.to_drive();`,
+`pto.toggle();`, `pto.is_driving()`.
+
+- Reverse the PTO motors the same way as the drive motors on their side:
+  forward must drive the robot forward.
+- `pto.use_piston(pto_piston, false);` if the piston works the other way round.
+- `pto.start_on_drive = false;` if the robot starts with the PTO on the mechanism.
+- `pto.shift_time = 100;` lets the motors go slack for 100 ms while the piston moves.
+- Four PTO motors: `hh::Pto pto(LeftPtoA, LeftPtoB, RightPtoA, RightPtoB);`
+- The mechanism can be any block (a `Positioner` for a lift, for example).
 
 ### ColorSorter: throw out the other alliance's pieces
 
@@ -356,7 +401,7 @@ To use the Brain screen for your own printing, set
 
 ## 4. Checking the robot
 
-**Ports page.** Tap the blue bar at the top of the auton screen. It shows all
+**Ports page.** Tap **Ports>** in the blue bar at the top of the auton screen. It shows all
 21 smart ports: what is plugged into each one and how hot each motor is.
 Green is fine, orange is a hot motor, red is something that was there when the
 program started and has stopped answering. Tap anywhere to go back. Use it
@@ -368,6 +413,21 @@ with `hh::ports::warn_unplugged = false;`.
 
 **No inertial sensor.** The bar shows `NO IMU!` when the inertial sensor isn't
 found on the port you gave the chassis. Autons can't turn accurately without it.
+
+**Odometry map.** Tap **Map>** in the blue bar. It shows a top-down picture of
+the field with the robot as a yellow arrow, a blue trail of where it has been,
+and its X, Y and heading as numbers. Tap anywhere to go back. It needs a
+chassis setup with position tracking (anything except `ZERO_TRACKER_NO_ODOM`).
+
+- **Finding coordinates for an auton:** open the map, push the robot by hand
+  to where you want it to go, and read X and Y off the screen. Tracking starts
+  at (0, 0) facing 0 when the program starts.
+- **Watching an auton:** if the map is open when autonomous starts, it stays
+  open and draws the path the robot takes.
+- The map shows X and Y from -72 to 72 (a full field with (0, 0) in the
+  middle). If your autons start at (0, 0) in a corner, add
+  `hh::odom_map::center_x = 72; hh::odom_map::center_y = 72;` to
+  `configure_robot()`. `hh::odom_map::field_size` changes how much it shows.
 
 ## 5. Getting a new version of the template
 

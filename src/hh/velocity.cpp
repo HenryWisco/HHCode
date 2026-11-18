@@ -8,7 +8,7 @@ Velocity::Velocity(vex::motor_group motors, float max_rpm, int)
 }
 
 void Velocity::set_rpm(float rpm) {
-  if (rpm == 0) {
+  if (rpm == 0 || paused) {   // paused: the motors are doing something else (see hh::Pto)
     stop();
     return;
   }
@@ -21,7 +21,7 @@ void Velocity::stop() {
   integral_ = 0;
   output_ = 0;
   ready_ms_ = 0;
-  motors.stop(vex::brakeType::coast);
+  if (!paused) motors.stop(vex::brakeType::coast);
 }
 
 float Velocity::rpm() { return motors.velocity(vex::percent) / 100.0 * max_rpm_; }

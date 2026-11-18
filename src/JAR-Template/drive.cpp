@@ -66,10 +66,60 @@ int SidewaysTracker_port, float SidewaysTracker_diameter, float SidewaysTracker_
       odom.set_physical_distances(0, 0);
     }
     // HHCode: remembered so set_holonomic_cartridge() can rebuild the motors.
-    holonomic_ports[0] = DriveLF_port;
-    holonomic_ports[1] = DriveRF_port;
-    holonomic_ports[2] = DriveLB_port;
-    holonomic_ports[3] = DriveRB_port;
+    holonomic_ports[0] = abs(DriveLF_port);
+    holonomic_ports[1] = abs(DriveRF_port);
+    holonomic_ports[2] = abs(DriveLB_port);
+    holonomic_ports[3] = abs(DriveRB_port);
+    holonomic_reversed[0] = is_reversed(DriveLF_port);
+    holonomic_reversed[1] = is_reversed(DriveRF_port);
+    holonomic_reversed[2] = is_reversed(DriveLB_port);
+    holonomic_reversed[3] = is_reversed(DriveRB_port);
+}
+
+/**
+ * HHCode: the constructor hh::Chassis uses. The same as the one above, except
+ * the four holonomic motors are given as a port, a reversed flag and a
+ * cartridge each. (With signed ports, PORT1 is 0 and can't be reversed.)
+ *
+ * @param holonomic_port Ports of the LF, RF, LB and RB motors.
+ * @param holonomic_reverse Whether each of those motors is reversed.
+ * @param holonomic_cartridge The cartridge in those motors.
+ */
+
+Drive::Drive(enum::drive_setup drive_setup, motor_group DriveL, motor_group DriveR,
+int gyro_port, float wheel_diameter, float wheel_ratio, float gyro_scale,
+const int holonomic_port[4], const bool holonomic_reverse[4], vex::gearSetting holonomic_cartridge,
+int ForwardTracker_port, float ForwardTracker_diameter, float ForwardTracker_center_distance,
+int SidewaysTracker_port, float SidewaysTracker_diameter, float SidewaysTracker_center_distance) :
+  Drive(drive_setup, DriveL, DriveR, gyro_port, wheel_diameter, wheel_ratio, gyro_scale,
+        holonomic_port[0], holonomic_port[1], holonomic_port[2], holonomic_port[3],
+        ForwardTracker_port, ForwardTracker_diameter, ForwardTracker_center_distance,
+        SidewaysTracker_port, SidewaysTracker_diameter, SidewaysTracker_center_distance)
+{
+  for (int i = 0; i < 4; i++) { holonomic_reversed[i] = holonomic_reverse[i]; }
+  set_holonomic_cartridge(holonomic_cartridge);
+}
+
+/**
+ * HHCode: spins one side of a tank drive, with any PTO motors that are
+ * driving with it (see hh::Pto).
+ *
+ * @param left_side true for the left side, false for the right.
+ * @param voltage Voltage out of 12.
+ */
+
+void Drive::spin_side(bool left_side, float voltage){
+  (left_side ? DriveL : DriveR).spin(fwd, voltage, volt);
+  for (vex::motor* extra : (left_side ? pto_left : pto_right)) { extra->spin(fwd, voltage, volt); }
+}
+
+/**
+ * HHCode: stops one side of a tank drive, with any PTO motors on it.
+ */
+
+void Drive::stop_side(bool left_side, vex::brakeType mode){
+  (left_side ? DriveL : DriveR).stop(mode);
+  for (vex::motor* extra : (left_side ? pto_left : pto_right)) { extra->stop(mode); }
 }
 
 /**
@@ -82,8 +132,8 @@ int SidewaysTracker_port, float SidewaysTracker_diameter, float SidewaysTracker_
 void Drive::drive_with_voltage(float leftVoltage, float rightVoltage){
   // HHCode: a mirrored auton swaps the two sides.
   if (mirrored) { float swap = leftVoltage; leftVoltage = rightVoltage; rightVoltage = swap; }
-  DriveL.spin(fwd, leftVoltage, volt);
-  DriveR.spin(fwd, rightVoltage,volt);
+  spin_side(true, leftVoltage);     // HHCode: was DriveL.spin, now includes PTO motors
+  spin_side(false, rightVoltage);
 }
 
 /**
@@ -257,8 +307,8 @@ float Drive::get_right_position_in(){
  */
 
 void Drive::drive_stop(vex::brakeType mode){
-  DriveL.stop(mode);
-  DriveR.stop(mode);
+  stop_side(true, mode);            // HHCode: was DriveL.stop, now includes PTO motors
+  stop_side(false, mode);
 }
 
 /**
@@ -394,8 +444,8 @@ void Drive::left_swing_to_angle(float angle, float swing_max_voltage, float swin
     float error = reduce_negative_180_to_180(angle - get_absolute_heading());
     float output = swingPID.compute(error);
     output = clamp(output, -turn_max_voltage, turn_max_voltage);
-    (mirrored ? DriveR : DriveL).spin(fwd, output, volt);
-    (mirrored ? DriveL : DriveR).stop(hold);
+    spin_side(!mirrored, output);     // HHCode: mirrored swaps sides; includes PTO motors
+    stop_side(mirrored, hold);
     hh::graph::record(error, output);   // HHCode
     task::sleep(10);
   }
@@ -415,8 +465,8 @@ void Drive::right_swing_to_angle(float angle, float swing_max_voltage, float swi
     float error = reduce_negative_180_to_180(angle - get_absolute_heading());
     float output = swingPID.compute(error);
     output = clamp(output, -turn_max_voltage, turn_max_voltage);
-    (mirrored ? DriveL : DriveR).spin(reverse, output, volt);
-    (mirrored ? DriveR : DriveL).stop(hold);
+    spin_side(mirrored, -output);     // HHCode: mirrored swaps sides; includes PTO motors
+    stop_side(!mirrored, hold);
     hh::graph::record(error, output);   // HHCode
     task::sleep(10);
   }
@@ -804,8 +854,8 @@ void Drive::holonomic_drive_to_pose(float X_position, float Y_position, float an
 void Drive::control_arcade(){
   float throttle = deadband(controller(primary).Axis3.value(), 5);
   float turn = deadband(controller(primary).Axis1.value(), 5);
-  DriveL.spin(fwd, to_volt(throttle+turn), volt);
-  DriveR.spin(fwd, to_volt(throttle-turn), volt);
+  spin_side(true, to_volt(throttle+turn));    // HHCode: includes PTO motors
+  spin_side(false, to_volt(throttle-turn));
 }
 
 /**
@@ -831,8 +881,8 @@ void Drive::control_holonomic(){
 void Drive::control_tank(){
   float leftthrottle = deadband(controller(primary).Axis3.value(), 5);
   float rightthrottle = deadband(controller(primary).Axis2.value(), 5);
-  DriveL.spin(fwd, to_volt(leftthrottle), volt);
-  DriveR.spin(fwd, to_volt(rightthrottle), volt);
+  spin_side(true, to_volt(leftthrottle));     // HHCode: includes PTO motors
+  spin_side(false, to_volt(rightthrottle));
 }
 
 /**
@@ -1028,10 +1078,10 @@ bool Drive::check_stall(float commanded_voltage){
  */
 
 void Drive::set_holonomic_cartridge(vex::gearSetting cartridge){
-  DriveLF = motor(abs(holonomic_ports[0]), cartridge, is_reversed(holonomic_ports[0]));
-  DriveRF = motor(abs(holonomic_ports[1]), cartridge, is_reversed(holonomic_ports[1]));
-  DriveLB = motor(abs(holonomic_ports[2]), cartridge, is_reversed(holonomic_ports[2]));
-  DriveRB = motor(abs(holonomic_ports[3]), cartridge, is_reversed(holonomic_ports[3]));
+  DriveLF = motor(holonomic_ports[0], cartridge, holonomic_reversed[0]);
+  DriveRF = motor(holonomic_ports[1], cartridge, holonomic_reversed[1]);
+  DriveLB = motor(holonomic_ports[2], cartridge, holonomic_reversed[2]);
+  DriveRB = motor(holonomic_ports[3], cartridge, holonomic_reversed[3]);
 }
 
 /**

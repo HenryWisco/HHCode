@@ -51,13 +51,13 @@ run on a robot yet.
 | Overheat rumble | New | `hh/driver` | Sim |
 | PC simulator and tests | New | `tests/` | Done |
 | Red/blue mirrored autons | New | `hh::selector::add_mirrored` | Sim |
-| `hh::Chassis` wrapper: signed ports, one call per drive type | New | | Not started |
+| `hh::Chassis`: signed ports, one line per drive type | New | `hh/chassis` | Sim (the long JAR form is still the default in `robot-config.cpp`) |
 | Separate forward/backward constants | Port | `chassis.set_drive_backward_constants` | Sim |
 | Turn direction (shortest/clockwise/counterclockwise) | Port | `chassis.clockwise()` | Sim (IMU scaling is JAR's gyro scale) |
 | Path smoothing for pure pursuit | Port | `chassis.path_smoothing` | Sim |
 | Brain ports page: motor temps, unplugged-port warning | New | `hh/ports` | Sim |
-| Brain odometry map | New | | Not started |
-| PTO | Port | | Not started |
+| Brain odometry map | New | `hh/odom_map` | Sim |
+| PTO | Port | `hh::Pto` | Sim (tank only) |
 | Update script (replace library folders, keep team files) | New | `tools/update-library` | Done (tested on copies of this repo) |
 | CI: run the simulator tests on GitHub | New | `.github/workflows` | Added |
 | Henry's own custom features | New | | Not listed yet |
@@ -81,11 +81,12 @@ hh::selector::add("Red Left", "Rush mid goal, score 4", red_left);
 hh::selector::add_mirrored("Red Left", "Blue Right", "Same routine, both sides", red_left);
 ```
 
-Still planned in the original shape:
+The one-line chassis was built as a builder that turns into JAR's `Drive`, so
+the global is still `Drive chassis` and nothing else changes:
 
 ```cpp
-// chassis in one call, negative port = reversed
-hh::Chassis chassis = hh::Chassis::tank({1, -2, 3}, {-4, 5, -6}, /*imu*/10, 3.25, 450);
+// negative port = reversed; then imu port, wheel diameter, cartridge, wheel rpm
+Drive chassis = hh::Chassis::tank({1, -2, 3}, {-4, 5, -6}, 10, 3.25, ratio6_1, 450);
 ```
 
 ## Still open

@@ -110,7 +110,7 @@ static void draw_status() {
   Brain.Screen.setFont(vex::fontType::mono20);
   Brain.Screen.setFillColor(vex::color(0x1565C0));
   Brain.Screen.setPenColor(vex::color::white);
-  Brain.Screen.printAt(250, 22, "Batt %3d%%  Head %5.1f ", (int)Brain.Battery.capacity(),
+  Brain.Screen.printAt(275, 22, "Batt %3d%% Head %5.1f", (int)Brain.Battery.capacity(),
                        chassis.get_absolute_heading());
   Brain.Screen.setFillColor(vex::color::black);
 }
@@ -124,9 +124,9 @@ static void draw_screen() {
   Brain.Screen.drawRectangle(0, 0, 480, 32);
   Brain.Screen.setPenColor(vex::color::white);
   Brain.Screen.setFont(vex::fontType::mono20);
-  // Tapping this bar opens the ports page. A missing inertial sensor is the
-  // most common reason autons go wrong, so it is called out here.
-  Brain.Screen.printAt(10, 22, true, "Ports >  %s  %s", Brain.SDcard.isInserted() ? "SD" : "no SD",
+  // Tapping "Ports>" or "Map>" opens that page. A missing inertial sensor is
+  // the most common reason autons go wrong, so it is called out here.
+  Brain.Screen.printAt(10, 22, true, "Ports>  Map>  %s%s", Brain.SDcard.isInserted() ? "" : "no SD ",
                        chassis.Gyro.installed() ? "" : "NO IMU!");
   draw_status();
 
@@ -174,7 +174,9 @@ static int selector_task() {
   int shown = -1;
   bool was_running_auton = false;
   bool was_touching = false;
-  bool showing_ports = false;
+  // Which page is on the Brain: the auton list, the ports page or the map.
+  enum Page { AUTONS, PORTS, MAP };
+  Page page = AUTONS;
   bool was_left = false;
   bool was_right = false;
   uint32_t last_status = 0;
@@ -185,8 +187,16 @@ static int selector_task() {
                              (Competition.isCompetitionSwitch() || Competition.isFieldControl());
 
     if (running_auton) {
-      // Leave the screen to the auton so it can print its own information.
-      if (!was_running_auton && show_on_brain && !graph::owns_screen()) Brain.Screen.clearScreen();
+      if (show_on_brain && page == MAP && !graph::owns_screen()) {
+        // The map was open when the auton started: keep it up to watch the routine.
+        if (now_ms() - last_status > 200) {
+          last_status = now_ms();
+          odom_map::draw();
+        }
+      } else if (!was_running_auton && show_on_brain && !graph::owns_screen()) {
+        // Leave the screen to the auton so it can print its own information.
+        Brain.Screen.clearScreen();
+      }
       was_running_auton = true;
       shown = -1;
       vex::task::sleep(50);
@@ -207,22 +217,24 @@ static int selector_task() {
       bool tapped = touching && !was_touching;
       was_touching = touching;
 
-      // The ports page: opened by tapping the title bar, closed by any tap.
-      if (showing_ports) {
+      // The ports page and the map: opened from the title bar, closed by any tap.
+      if (page != AUTONS) {
         if (tapped) {
-          showing_ports = false;
+          page = AUTONS;
           shown = -1;
-        } else if (now_ms() - last_status > 500) {
+        } else if (now_ms() - last_status > (page == PORTS ? 500u : 200u)) {
           last_status = now_ms();
-          ports::draw();
+          if (page == PORTS) ports::draw(); else odom_map::draw();
         }
-        if (showing_ports) {
+        if (page != AUTONS) {
           vex::task::sleep(20);
           continue;
         }
       } else if (tapped) {
         if (Brain.Screen.yPosition() < 36) {
-          showing_ports = true;
+          // "Map>" sits between x = 90 and 130. The rest of the bar is ports.
+          int x = Brain.Screen.xPosition();
+          page = (x >= 80 && x < 150) ? MAP : PORTS;
           last_status = 0;
           vex::task::sleep(20);
           continue;

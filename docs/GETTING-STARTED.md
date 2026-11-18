@@ -29,7 +29,8 @@ in the comments.
    then set the inertial sensor port, wheel size and gear ratio. Leave the
    drive setup as `ZERO_TRACKER_NO_ODOM` for now. Building an X-drive, or using
    tracking wheels? Copy a ready-made chassis from
-   [CONFIG-RECIPES.md](CONFIG-RECIPES.md).
+   [CONFIG-RECIPES.md](CONFIG-RECIPES.md). That page also shows the short
+   way: the whole chassis in one line, with no drive motors in section 1.
 3. **Mechanisms.** Wrap your other motors and pistons in blocks (table below).
 4. **Driver control.** Pick your drivetrain type and stick layout, then give
    each mechanism its buttons.

@@ -29,16 +29,16 @@ Written and compiling, **not yet tested on a robot**:
 - Ports page on the Brain, unplugged-port warning, missing-inertial warning
 - `tools/update-library`: take a new library version and keep team files
 - Simulator tests run on GitHub on every push
+- `hh::Chassis`: the chassis in one line, with plain port numbers
+- Odometry map on the Brain (position, heading and trail)
+- `hh::Pto`: drive motors that shift to a mechanism
 
-Everything above passes the PC simulator tests in `tests/` (195 scenarios on
+Everything above passes the PC simulator tests in `tests/` (212 scenarios on
 tank, tank with odometry, mecanum and X-drive robots; see `tests/README.md`).
 The simulator checks logic, not hardware, so the robot test still matters.
 
 Not started (details in [SPEC.md](SPEC.md)):
 
-- `hh::Chassis` wrapper: set up the chassis in one call with signed ports
-- Brain screen: odometry map
-- PTO
 - Henry's custom features (below)
 
 ## Design goals (from Henry)
