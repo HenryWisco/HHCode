@@ -24,6 +24,23 @@ extern bool use_controller;
  */
 void add(const char* name, const char* description, void (*routine)());
 
+/**
+ * Adds one routine twice: as written, and mirrored for the other side of the
+ * field. Write and tune it once, on the side named first.
+ *
+ *   hh::selector::add_mirrored("Red Left", "Blue Right", "4 rings, touches ladder", red_left);
+ *
+ * In the mirrored version every chassis motion is flipped left-to-right:
+ * turn_to_angle(90) turns left instead of right, drive_to_point(24, 36) goes
+ * to (-24, 36), strafes and swings swap sides. Mechanisms are not changed; if
+ * a routine uses a left-side wing, check hh::selector::mirrored() and use the
+ * right-side one instead.
+ */
+void add_mirrored(const char* name, const char* mirrored_name, const char* description, void (*routine)());
+
+/** True while a mirrored auton is running. */
+bool mirrored();
+
 /** Runs the chosen auton. Call from autonomous(). */
 void run_selected();
 

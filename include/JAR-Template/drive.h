@@ -62,6 +62,16 @@ private:
   float current_drive_voltage();
   float current_turn_voltage();
   static int motion_task_function();
+  int next_turn_direction = 0;
+  int take_turn_direction();
+  bool use_backward_constants = false;
+  float backward_max_voltage = 0;
+  float backward_kp = 0;
+  float backward_ki = 0;
+  float backward_kd = 0;
+  float backward_starti = 0;
+  bool mirrored = false;
+  void spin_holonomic(float lf, float rf, float lb, float rb);
 
 public:
   drive_setup drive_setup = ZERO_TRACKER_NO_ODOM;
@@ -249,6 +259,29 @@ public:
   void follow_path(std::vector<path_point> path, float lookahead, bool backwards);
   void follow_path(std::vector<path_point> path, float lookahead, bool backwards, float drive_min_voltage, float drive_max_voltage, float heading_max_voltage);
   void follow_path(std::vector<path_point> path, float lookahead, bool backwards, float drive_min_voltage, float drive_max_voltage, float heading_max_voltage, float drive_settle_error, float drive_settle_time, float drive_timeout, float drive_kp, float drive_ki, float drive_kd, float drive_starti, float heading_kp, float heading_ki, float heading_kd, float heading_starti);
+
+  // The next turn_to_angle() goes this way round even if the other is shorter:
+  //   chassis.clockwise().turn_to_angle(270);
+  Drive& clockwise();
+  Drive& counterclockwise();
+
+  // Separate constants for driving backward (max voltage, kP, kI, kD, startI).
+  // Used by drive_distance() with a negative distance.
+  void set_drive_backward_constants(float max_voltage, float kp, float ki, float kd, float starti);
+  void clear_drive_backward_constants();
+
+  // Rounds the corners of follow_path() paths. 0 is off; try 0.8.
+  float path_smoothing = 0;
+  std::vector<path_point> smooth_path(std::vector<path_point> path, float smoothing);
+
+  // Mirrored autons: the chassis acts as its own mirror image (left and right
+  // swapped, headings counted the other way), so a routine written for one
+  // side of the field runs on the other. hh::selector::add_mirrored() turns
+  // this on and off for you.
+  void set_mirrored(bool mirror);
+  bool is_mirrored();
+  // The inertial sensor's rotation in degrees, not wrapped to 0-360.
+  float get_rotation();
 
   // Mecanum / X-drive: tell the chassis which cartridge the four wheel motors
   // use, so strafe distances are measured correctly. Not needed for green

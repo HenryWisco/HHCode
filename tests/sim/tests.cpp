@@ -399,6 +399,137 @@ TEST(tuner_adjusts_runs_and_stops) {
   CHECK(robot.forward_speed > 20);
 }
 
+TEST(ports_page_and_unplugged_warning) {
+  sim::devices[vex::PORT1] = kDeviceTypeMotorSensor;
+  sim::devices[vex::PORT5] = kDeviceTypeMotorSensor;
+  sim::devices[vex::PORT10] = kDeviceTypeImuSensor;
+  sim::motor(vex::PORT5).temperature = 61;
+  boot();
+  CHECK(sim::brain_shows("Ports >"));
+  CHECK(!sim::brain_shows("NO IMU!"));
+
+  sim::tap_screen(100, 15);              // the title bar opens the ports page
+  sim::run(600);
+  CHECK(sim::brain_shows("tap to go back"));
+  CHECK(sim::brain_shows("IMU"));
+  CHECK(sim::brain_shows("61C"));
+  CHECK(strcmp(hh::selector::selected_name(), "Drive Test") == 0);
+  CHECK(strcmp(hh::ports::name(10), "IMU") == 0);
+  CHECK(strcmp(hh::ports::name(7), "") == 0);
+  CHECK_NEAR(hh::ports::temperature(5), 61, 0.01);
+  CHECK(!hh::ports::lost(1));
+
+  int rumbles = sim::rumbles();
+  sim::devices[vex::PORT1] = kDeviceTypeNoSensor;   // a cable comes out
+  sim::run(700);
+  CHECK(sim::rumbles() == rumbles + 1);
+  CHECK(contains(sim::controller_line(3), "PORT 1 UNPLUGGED"));
+  CHECK(hh::ports::lost(1));
+  CHECK(sim::brain_shows("LOST"));
+  sim::run(3000);
+  CHECK(sim::rumbles() == rumbles + 1);  // one warning, not one every second
+
+  sim::tap_screen(300, 120);             // any tap goes back, without changing the auton
+  sim::run(200);
+  CHECK(sim::brain_shows("Auton 1 of"));
+  CHECK(strcmp(hh::selector::selected_name(), "Drive Test") == 0);
+}
+
+TEST(missing_inertial_sensor_is_flagged) {
+  sim::imu_installed = false;
+  boot();
+  CHECK(sim::brain_shows("NO IMU!"));
+}
+
+TEST(forced_turn_direction) {
+  boot_for_auton();
+  chassis.clockwise().turn_to_angle(270);        // the short way would be 90 left
+  CHECK_NEAR(robot.heading_deg, 270, 3);
+  chassis.turn_to_angle(0);                      // only the one turn is forced
+  CHECK_NEAR(robot.heading_deg, 360, 3);
+  chassis.counterclockwise().turn_to_angle(90);  // the short way would be 90 right
+  CHECK_NEAR(robot.heading_deg, 90, 3);
+  chassis.clockwise().turn_to_angle(180);        // already the short way: no change
+  CHECK_NEAR(robot.heading_deg, 180, 3);
+  chassis.clockwise().turn_to_angle(180);        // already there: doesn't spin a full circle
+  CHECK_NEAR(robot.heading_deg, 180, 3);
+
+  chassis.async().counterclockwise().turn_to_angle(270);   // works in the background too
+  chassis.wait();
+  CHECK_NEAR(robot.heading_deg, -90, 3);
+}
+
+TEST(backward_drive_constants) {
+  boot_for_auton();
+  chassis.set_drive_backward_constants(4, 1.5, 0, 10, 0);
+  chassis.async().drive_distance(24);
+  sim::run(200);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), 10, 0.5);     // forward is unchanged
+  chassis.wait();
+  chassis.async().drive_distance(-24);
+  sim::run(200);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), -4, 0.5);     // backward is capped at 4 volts
+  chassis.wait();
+  CHECK_NEAR(robot.y, 0, 1.5);
+  chassis.clear_drive_backward_constants();
+  chassis.async().drive_distance(-24);
+  sim::run(200);
+  CHECK_NEAR(chassis.DriveR.voltage(volt), -10, 0.5);
+  chassis.wait();
+}
+
+// Puts the simulated robot back at the origin, facing forward.
+static void back_to_origin() {
+  robot.x = 0;
+  robot.y = 0;
+  robot.heading_deg = 0;
+}
+
+static void mirror_routine() {
+  chassis.drive_distance(12);
+  chassis.turn_to_angle(60);
+  chassis.drive_distance(10);
+}
+
+TEST(mirrored_auton_is_a_mirror_image) {
+  boot(true);
+  hh::selector::add_mirrored("Side A", "Side B", "Drives, turns right, drives", mirror_routine);
+  select_auton("Side A");
+  sim::set_mode(sim::AUTONOMOUS);
+  sim::run(8000);
+  double x = robot.x, y = robot.y, heading = robot.heading_deg;
+  CHECK(x > 5);
+  CHECK_NEAR(heading, 60, 3);
+  CHECK(!chassis.is_mirrored());
+
+  sim::set_mode(sim::DISABLED);
+  sim::run(500);
+  back_to_origin();
+  select_auton("Side B");
+  sim::set_mode(sim::AUTONOMOUS);
+  sim::run(200);
+  CHECK(hh::selector::mirrored());
+  sim::run(7800);
+  CHECK_NEAR(robot.x, -x, 1);
+  CHECK_NEAR(robot.y, y, 1);
+  CHECK_NEAR(robot.heading_deg, -heading, 3);
+  CHECK(!chassis.is_mirrored());           // back to normal once the auton ends
+}
+
+TEST(mirroring_is_cleared_when_driver_control_starts) {
+  boot(true);
+  hh::selector::add_mirrored("Side A", "Side B", "Leaves a motion running", leftover_auton);
+  select_auton("Side B");
+  sim::set_mode(sim::AUTONOMOUS);
+  sim::run(500);                           // cut off mid-auton, like a real match
+  CHECK(chassis.is_mirrored());
+  sim::set_mode(sim::DISABLED);
+  sim::run(300);
+  sim::set_mode(sim::DRIVER);
+  sim::run(300);
+  CHECK(!chassis.is_mirrored());
+}
+
 TEST(graph_draws_the_latest_motion) {
   boot_for_auton();
   hh::graph::enabled = true;
@@ -454,6 +585,25 @@ TEST(graph_is_off_by_default) {
 /*---------------------------------------------------------------------------*/
 /*  Tank drive                                                              */
 /*---------------------------------------------------------------------------*/
+
+TEST(mirrored_swings_swap_sides) {
+  boot_for_auton();
+  chassis.left_swing_to_angle(90);
+  chassis.right_swing_to_angle(30);
+  double x = robot.x, y = robot.y;
+  CHECK_NEAR(heading_off(30), 0, 3);
+
+  sim::run(500);
+  back_to_origin();
+  chassis.set_mirrored(true);
+  chassis.left_swing_to_angle(90);
+  CHECK_NEAR(heading_off(-90), 0, 3);
+  CHECK_NEAR(chassis.get_absolute_heading(), 90, 3);   // the auton still sees 90
+  chassis.right_swing_to_angle(30);
+  CHECK_NEAR(heading_off(-30), 0, 3);
+  CHECK_NEAR(robot.x, -x, 1.5);
+  CHECK_NEAR(robot.y, y, 1.5);
+}
 
 TEST(swing_turns) {
   boot_for_auton();
@@ -1061,6 +1211,67 @@ TEST(follow_path_single_point_and_empty_path) {
   CHECK(robot.y - from > 3);
 }
 
+// Follows a path with one sharp corner at (0, 30) and returns how close the
+// robot came to that corner.
+static double closest_to_corner(float smoothing) {
+  back_to_origin();
+  chassis.set_coordinates(0, 0, 0);
+  sim::run(50);
+  chassis.path_smoothing = smoothing;
+  chassis.async().follow_path({{0, 30}, {30, 30}}, 6);
+  double closest = 1e9;
+  double start = sim::now();
+  while (chassis.is_moving() && sim::now() - start < 15000) {
+    sim::run(20);
+    if (distance_to(0, 30) < closest) closest = distance_to(0, 30);
+  }
+  CHECK(distance_to(30, 30) < 4);
+  chassis.drive_stop(brake);
+  sim::run(500);
+  return closest;
+}
+
+TEST(path_smoothing_rounds_corners) {
+  boot_for_auton();
+  odom_constants();
+  double sharp = closest_to_corner(0);
+  double rounded = closest_to_corner(0.9);
+  CHECK(rounded > sharp + 1.5);
+
+  std::vector<path_point> smooth = chassis.smooth_path({{0, 0}, {0, 30}, {30, 30}}, 0.9);
+  CHECK(smooth.size() > 15);
+  CHECK_NEAR(smooth.front().x, 0, 0.001);       // the ends don't move
+  CHECK_NEAR(smooth.front().y, 0, 0.001);
+  CHECK_NEAR(smooth.back().x, 30, 0.001);
+  CHECK_NEAR(smooth.back().y, 30, 0.001);
+}
+
+TEST(mirrored_turn_direction) {
+  boot_for_auton();
+  chassis.set_mirrored(true);
+  chassis.clockwise().turn_to_angle(270);       // clockwise for the auton is left for the robot
+  CHECK_NEAR(robot.heading_deg, -270, 3);
+}
+
+TEST(mirrored_odometry_and_paths) {
+  boot_for_auton();
+  odom_constants();
+  chassis.set_mirrored(true);
+  chassis.set_coordinates(0, 0, 0);
+  sim::run(50);
+  chassis.turn_to_point(24, 24);
+  CHECK_NEAR(heading_off(-45), 0, 3);
+  chassis.drive_to_point(24, 24);
+  CHECK(distance_to(-24, 24) < 3.5);
+  chassis.follow_path({{24, 48}, {48, 48}});
+  CHECK(distance_to(-48, 48) < 4);
+  chassis.turn_to_angle(200);
+  chassis.drive_distance(-10);
+  // The auton's own coordinates are the un-mirrored ones.
+  CHECK_NEAR(chassis.get_X_position(), -robot.x, 0.75);
+  CHECK_NEAR(chassis.get_Y_position(), robot.y, 0.75);
+}
+
 TEST(chained_point_to_point) {
   start_odom();
   chassis.chain().drive_to_point(0, 24);
@@ -1139,6 +1350,22 @@ TEST(holonomic_odom_test_auton_returns_to_start) {
   CHECK(distance_to(0, 0) < 4);
   CHECK_NEAR(heading_off(0), 0, 5);
   CHECK_NEAR(chassis.get_X_position(), robot.x, 1.5);
+  CHECK_NEAR(chassis.get_Y_position(), robot.y, 1.5);
+}
+
+TEST(mirrored_strafe_and_holonomic_pose) {
+  boot_for_auton();
+  odom_constants();
+  chassis.set_mirrored(true);
+  chassis.set_coordinates(0, 0, 0);
+  sim::run(50);
+  chassis.strafe_distance(12);
+  CHECK_NEAR(robot.x, -12, 2);
+  CHECK_NEAR(robot.y, 0, 1.5);
+  chassis.holonomic_drive_to_pose(18, 18, 90);
+  CHECK(distance_to(-18, 18) < 4);
+  CHECK_NEAR(heading_off(-90), 0, 5);
+  CHECK_NEAR(chassis.get_X_position(), -robot.x, 1.5);
   CHECK_NEAR(chassis.get_Y_position(), robot.y, 1.5);
 }
 
@@ -1233,7 +1460,11 @@ int main(int argc, char** argv) {
   for (Test& test : all_tests()) {
     printf("  %s\n", test.name);
     fflush(stdout);
-    std::string command = std::string("\"") + argv[0] + "\" " + test.name;
+    std::string program = argv[0];
+#ifdef _WIN32
+    for (char& c : program) if (c == '/') c = '\\';   // cmd.exe needs backslashes
+#endif
+    std::string command = "\"" + program + "\" " + test.name;
     if (system(command.c_str()) != 0) {
       printf("    ^ FAILED\n");
       failed++;

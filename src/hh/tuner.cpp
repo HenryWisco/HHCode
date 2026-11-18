@@ -48,6 +48,7 @@ static void stop_test() {
   test_task.stop();
   chassis.cancel_motion();
   chassis.drive_stop(vex::brakeType::coast);
+  chassis.set_mirrored(false);
   running = false;
 }
 

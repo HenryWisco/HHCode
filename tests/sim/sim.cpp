@@ -160,6 +160,7 @@ void run(double ms) { sleep_ms(ms); }
 Robot robot;
 bool sd_inserted = true;
 bool imu_installed = true;
+V5_DeviceType devices[V5_MAX_DEVICE_PORTS] = {};
 double optical_hue = 100;
 bool optical_near = false;
 bool optical_light = false;
@@ -426,6 +427,18 @@ static void physics_step(double dt) {
 /*---------------------------------------------------------------------------*/
 /*  The fake VEX API                                                         */
 /*---------------------------------------------------------------------------*/
+
+int32_t vexDeviceGetStatus(V5_DeviceType* buffer) {
+  for (int i = 0; i < V5_MAX_DEVICE_PORTS; i++) buffer[i] = sim::devices[i];
+  return V5_MAX_DEVICE_PORTS;
+}
+
+// A device handle is just its port number plus one, so it is never null.
+V5_DeviceT vexDeviceGetByIndex(uint32_t index) { return (V5_DeviceT)(uintptr_t)(index + 1); }
+
+double vexDeviceMotorTemperatureGet(V5_DeviceT device) {
+  return sim::motors[(uintptr_t)device - 1].temperature;
+}
 
 namespace vex {
 

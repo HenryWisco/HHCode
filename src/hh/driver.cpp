@@ -195,6 +195,9 @@ void update() {
     braking = false;
     // A background motion left over from autonomous must not fight the driver.
     chassis.cancel_motion();
+    // Mirroring is for autons only. One cut short by the end of autonomous
+    // never got to turn it back off.
+    if (!tuner::enabled) chassis.set_mirrored(false);
     tuner::reset();
     for (int i = 0; i < subsystem_count(); i++) {
       subsystem_at(i)->on_driver_start();

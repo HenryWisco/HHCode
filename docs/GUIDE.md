@@ -230,6 +230,32 @@ public:
    hh::selector::add("Red Left", "4 rings, touches ladder", red_left);
    ```
 
+### One auton for both sides of the field
+
+Write and tune a routine once, then let the template flip it for the other
+side:
+
+```cpp
+hh::selector::add_mirrored("Red Left", "Blue Right", "4 rings, touches ladder", red_left);
+```
+
+That adds two autons to the list. "Red Left" runs `red_left()` as written.
+"Blue Right" runs the same function with every chassis motion flipped
+left-to-right: `turn_to_angle(90)` turns left instead of right,
+`drive_to_point(24, 36)` goes to (-24, 36), strafes, swings and paths swap
+sides. Inside the routine, headings and coordinates still read as if it were
+the original side, so nothing in your code changes.
+
+Mechanisms are not flipped. If the routine uses something that only exists on
+one side of the robot, check which version is running:
+
+```cpp
+if (hh::selector::mirrored()) right_wing.extend(); else left_wing.extend();
+```
+
+Mirroring only works if the field really is a mirror image on the other
+side. Run the mirrored version on the real field before trusting it.
+
 ### Smarter autons
 
 **Do two things at once.** `async()` makes the next motion return right away:
@@ -256,6 +282,10 @@ chassis.chain().turn_to_angle(45);
 chassis.drive_distance(12);          // the last one settles normally
 ```
 
+**Pick which way to turn.** `turn_to_angle` takes the shorter way round. When
+something is in the way, force it: `chassis.clockwise().turn_to_angle(270);`
+or `chassis.counterclockwise().turn_to_angle(90);`. It applies to that one turn.
+
 **Follow a curved path** (odom robots). The robot drives smoothly through the
 points instead of stopping at each one:
 
@@ -277,6 +307,8 @@ Positive is right. If it goes the wrong distance, tune
 | `chassis.stall_time` | A motion gives up after the robot has been stuck this many ms, so one bad bump doesn't burn the whole auton. `chassis.interfered` is true afterwards. Try 300. |
 | `chassis.drive_chain_error`, `turn_chain_error` | How close counts as "done" for `chain()`. |
 | `chassis.path_lookahead` | Default lookahead for `follow_path`. Bigger is smoother, smaller is tighter. |
+| `chassis.path_smoothing` | Rounds the corners of `follow_path` paths before driving them. 0 is off; try 0.8. |
+| `chassis.set_drive_backward_constants(10, 1.5, 0, 10, 0);` | Separate max voltage, kP, kI, kD and startI for `drive_distance` with a negative distance, for robots that behave differently in reverse. |
 
 ### Tuning PID without re-downloading
 
@@ -321,3 +353,36 @@ With an SD card in the Brain, the choice is remembered between runs.
 
 To use the Brain screen for your own printing, set
 `hh::selector::show_on_brain = false;` in `configure_robot()`.
+
+## 4. Checking the robot
+
+**Ports page.** Tap the blue bar at the top of the auton screen. It shows all
+21 smart ports: what is plugged into each one and how hot each motor is.
+Green is fine, orange is a hot motor, red is something that was there when the
+program started and has stopped answering. Tap anywhere to go back. Use it
+before every match: a motor that isn't on the page isn't plugged in.
+
+**Unplugged warning.** If a cable comes out or a motor dies while the program
+is running, the controller rumbles and shows `PORT 5 UNPLUGGED`. Turn it off
+with `hh::ports::warn_unplugged = false;`.
+
+**No inertial sensor.** The bar shows `NO IMU!` when the inertial sensor isn't
+found on the port you gave the chassis. Autons can't turn accurately without it.
+
+## 5. Getting a new version of the template
+
+When your coach gives you a newer template, this replaces the library and
+keeps your robot's files (`robot-config`, your autons, your PID constants,
+`main.cpp`, `subsystems/`).
+
+1. Unzip the new template somewhere, like `Downloads/HHCode-new`.
+2. Open **your team's** folder in VS Code, then **Terminal → New Terminal**.
+3. Windows: `.\tools\update-library.ps1 -From "C:\Users\you\Downloads\HHCode-new"`
+   Mac: `sh tools/update-library.sh ~/Downloads/HHCode-new`
+4. Click **Build**.
+
+Your old library is saved in a `_library-backup-...` folder first. Delete that
+folder once everything works. If Windows refuses to run the script, do it by
+hand: delete `include/hh`, `src/hh`, `include/JAR-Template` and
+`src/JAR-Template` from your folder and copy the same four folders in from
+the new template.

@@ -24,21 +24,21 @@ Written and compiling, **not yet tested on a robot**:
 - Live PID tuner on the controller
 - PID graph on the Brain screen (`hh::graph`)
 - `hh::ColorSorter`: optical-sensor color sorting with a piston or the intake
+- Mirrored autons (`add_mirrored`): one routine for both sides of the field
+- Forced turn direction, separate backward drive constants, path smoothing
+- Ports page on the Brain, unplugged-port warning, missing-inertial warning
+- `tools/update-library`: take a new library version and keep team files
+- Simulator tests run on GitHub on every push
 
-Everything above passes the PC simulator tests in `tests/` (164 scenarios on
+Everything above passes the PC simulator tests in `tests/` (195 scenarios on
 tank, tank with odometry, mecanum and X-drive robots; see `tests/README.md`).
 The simulator checks logic, not hardware, so the robot test still matters.
 
 Not started (details in [SPEC.md](SPEC.md)):
 
-- Red/blue mirrored autons
 - `hh::Chassis` wrapper: set up the chassis in one call with signed ports
-- Separate forward/backward constants; turn direction (shortest/left/right)
-- Path smoothing for `follow_path`
-- Brain screens: odom map, motor temperatures, unplugged ports
+- Brain screen: odometry map
 - PTO
-- Update script (replace the library folders, keep team files)
-- Running the simulator tests automatically on GitHub
 - Henry's custom features (below)
 
 ## Design goals (from Henry)

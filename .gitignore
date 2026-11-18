@@ -17,3 +17,6 @@ Thumbs.db
 
 # Local tools for the simulator tests
 /tests/.venv/
+
+# Made by tools/update-library
+/_library-backup-*/

@@ -38,6 +38,7 @@ src/
   main.cpp               Start-up, autonomous and driver control (rarely edited)
 vex/                     VEX build scripts (don't edit)
 tests/                   PC simulator and tests for the library (not part of the robot program)
+tools/                   update-library: take a new template version, keep your robot files
 docs/                    Guides, roadmap, credits
 makefile                 Build file used by the VEX extension
 ```

@@ -59,6 +59,8 @@ extern bool imu_installed;
 extern double optical_hue;
 extern bool optical_near;
 extern bool optical_light;
+/** What is plugged into each smart port (index 0 is port 1). Unplug one by setting it to kDeviceTypeNoSensor. */
+extern V5_DeviceType devices[V5_MAX_DEVICE_PORTS];
 /** How many line segments have been drawn on the Brain since it was last cleared. */
 int brain_lines();
 std::map<std::string, std::string>& sd_files();
