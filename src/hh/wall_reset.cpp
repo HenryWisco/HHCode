@@ -1,3 +1,10 @@
+// Wall resets: correcting the robot's tracked position from distance
+// sensors that look at the field walls.
+//
+// The idea: the inertial sensor says which way the robot faces, and that
+// stays accurate. So if a sensor pointing at a wall reads 20 inches, the
+// robot's distance from that wall is known exactly, which fixes X or Y.
+
 #include "vex.h"
 
 namespace hh {

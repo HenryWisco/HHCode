@@ -1,3 +1,9 @@
+// Driver profiles: a named set of driver settings for each driver.
+//
+// start() takes a snapshot of the settings configure_robot() made (the
+// "base"). Picking a profile puts the base back and then applies that
+// profile's changes on top.
+
 #include "vex.h"
 
 namespace hh {

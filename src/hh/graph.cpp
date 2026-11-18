@@ -1,3 +1,9 @@
+// PID graph: draws the latest chassis motion on the Brain screen.
+//
+// The chassis calls begin() when a motion starts and record() every 10 ms
+// during it. A separate task (graph_task) draws what has been recorded, so
+// drawing never slows the motion down.
+
 #include "vex.h"
 
 namespace hh {
@@ -15,6 +21,10 @@ static int count = 0;
 static int stride = 1;
 static int skipped = 0;
 
+// label / units        what the motion is ("Drive", "in")
+// recording            a motion is sending points right now
+// showing              the graph has the Brain screen
+// dirty                there is something new to draw
 static const char* label = "";
 static const char* units = "";
 static uint32_t begin_ms = 0;
@@ -27,6 +37,7 @@ static float first_error = 0;
 static float last_error = 0;
 static float worst_overshoot = 0;
 
+// A motion is starting: throw away the old graph and take the screen.
 void begin(const char* motion_label, const char* motion_units) {
   if (!enabled) return;
   label = motion_label;
@@ -44,6 +55,7 @@ void begin(const char* motion_label, const char* motion_units) {
   dirty = true;
 }
 
+// One point of the motion: how far from the target, and the voltage sent.
 void record(float error, float output) {
   if (!enabled || !recording) return;
   last_record_ms = now_ms();
@@ -69,6 +81,7 @@ void record(float error, float output) {
   dirty = true;
 }
 
+// Numbers about the latest motion, for the screen and for teams to read.
 float duration_ms() { return last_record_ms - begin_ms; }
 float start_error() { return first_error; }
 float final_error() { return last_error; }
@@ -79,6 +92,7 @@ bool owns_screen() { return enabled && showing; }
 static const int LEFT = 10;
 static const int WIDTH = 460;
 
+// The screen x position for point number `index` out of `total`.
 static int column(int index, int total) {
   if (total <= 1) return LEFT;
   return LEFT + index * WIDTH / (total - 1);
@@ -104,6 +118,7 @@ static void draw_trace(const float* values, int total, int top, int bottom, floa
   }
 }
 
+// Draws the whole graph: a title, the numbers, then the two traces.
 static void draw() {
   int total = count;
   Brain.Screen.clearScreen();
@@ -136,6 +151,8 @@ static void draw() {
   Brain.Screen.setPenColor(vex::color::white);
 }
 
+// The drawing task. It redraws at most 5 times a second while a motion
+// runs, once more when it ends, and gives the screen back when tapped.
 static int graph_task() {
   bool was_touching = false;
   uint32_t last_draw = 0;

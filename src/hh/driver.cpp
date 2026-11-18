@@ -1,8 +1,18 @@
+// Driver control: turns joystick positions into motor voltages.
+//
+// Every 20 ms usercontrol() calls update(), which runs the button bindings
+// and then drive(). drive() reads the sticks for the chosen layout, works
+// out how much "forward", "turn" and "strafe" the driver is asking for, and
+// output() sends that to the motors.
+//
+// Also here: live joystick curve tuning and the overheat warning.
+
 #include "vex.h"
 
 namespace hh {
 namespace driver {
 
+// The defaults for every setting in driver.h. configure_robot() changes them.
 DriveType drive_type = TANK;
 DriveStyle style = SPLIT_ARCADE;
 float stick_deadband = 5;
@@ -31,6 +41,9 @@ static const char* curve_file() {
   return file;
 }
 
+// field_offset   the heading that counts as "away from the driver" (field-centric)
+// braking        true while the active brake is holding the robot still
+// brake_targets  where each side or wheel was when the sticks were let go
 static float field_offset = 0;
 static bool braking = false;
 static float brake_targets[4];
@@ -43,6 +56,7 @@ float curve(float input, float strength) {
   return input * (e + exp((fabs(input) - 100.0) / 10.0) * (1.0 - e));
 }
 
+// One stick reading: ignore tiny movements, then apply the curve.
 static float stick(float raw, float strength) {
   return curve(::deadband(raw, stick_deadband), strength);
 }
@@ -97,6 +111,9 @@ static void output(float* percents, int count) {
   }
 }
 
+// Reads the joysticks and drives. Sticks are numbered the VEX way:
+// Axis3 = left stick up/down, Axis4 = left stick left/right,
+// Axis2 = right stick up/down, Axis1 = right stick left/right.
 void drive() {
   float left_y = Controller.Axis3.position();
   float left_x = Controller.Axis4.position();
@@ -106,6 +123,7 @@ void drive() {
   float forward = 0, turn = 0, strafe = 0;
   bool holonomic = drive_type != TANK;
 
+  // Step 1: what does the driver want, for the stick layout in use?
   switch (style) {
     case TANK_STICKS: {
       float left = stick(left_y, throttle_curve);
@@ -138,6 +156,9 @@ void drive() {
       break;
   }
 
+  // Step 2 (field-centric only): the stick says which way to go on the
+  // field. Rotate that by the robot's heading to get which way the robot
+  // itself has to move.
   if (style == FIELD_CENTRIC && holonomic) {
     float heading = to_rad(chassis.get_absolute_heading() - field_offset);
     float field_forward = forward;
@@ -146,6 +167,8 @@ void drive() {
     strafe = field_strafe * cos(heading) - field_forward * sin(heading);
   }
 
+  // Step 3: mix forward / turn / strafe into a speed for each wheel
+  // (mecanum, X-drive) or each side (tank).
   if (holonomic) {
     float wheels[4] = {
       forward + turn + strafe,   // left front
@@ -160,6 +183,7 @@ void drive() {
   }
 }
 
+// Writes the two curve numbers to the SD card as text, e.g. "3.0 2.5".
 static void save_curves() {
   if (!Brain.SDcard.isInserted()) return;
   char text[40];
@@ -167,6 +191,8 @@ static void save_curves() {
   Brain.SDcard.savefile(curve_file(), (uint8_t*)text, length);
 }
 
+// Reads them back at start-up. Only when curve tuning is on, so a team
+// that sets its curves in code always gets exactly those.
 void load_saved_curves() {
   if (!curve_tuning || !Brain.SDcard.isInserted() || !Brain.SDcard.exists(curve_file())) return;
   char text[40] = {0};
@@ -178,6 +204,9 @@ void load_saved_curves() {
   }
 }
 
+// Live curve tuning: Left/Right change the throttle curve, Y/A the turn
+// curve. `last` remembers each button from the previous loop so one
+// press changes the value once.
 static void tune_curves() {
   static bool last[4] = {false, false, false, false};
   static bool shown = false;
@@ -202,6 +231,9 @@ static void tune_curves() {
   }
 }
 
+// Called every 20 ms from usercontrol(). The first block spots the
+// start of driver control (the first call, or the first after a gap
+// while the robot was disabled or in autonomous) and tidies up.
 void update() {
   static uint32_t last_update = 0;
   uint32_t now = now_ms();
@@ -233,6 +265,9 @@ void update() {
   if (!Sequence::chassis_busy()) drive();
 }
 
+// Called by the background task. Once a second it finds the hottest
+// motor on the robot and, if that is over overheat_temp, buzzes the
+// controller and names it. At most one warning every 15 seconds.
 void check_overheat() {
   static uint32_t last_check = 0;
   static uint32_t last_warning = 0;

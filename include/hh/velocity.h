@@ -63,6 +63,11 @@ public:
   vex::motor_group motors;
 
 private:
+  // max_rpm_     the mechanism's top speed
+  // target_rpm_  the speed asked for (0 = stopped)
+  // integral_    extra voltage built up by ki
+  // output_      the voltage sent last time (for the ramp)
+  // ready_ms_    how long the speed has been on target
   float max_rpm_;
   float target_rpm_ = 0;
   float integral_ = 0;

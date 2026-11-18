@@ -51,6 +51,8 @@ before looking at the others.
 | `hh::Pneumatic` | Claw, clamp, wings | `extend()`, `retract()`, `toggle()` |
 | `hh::Velocity` | Flywheel | `set_rpm(2400)`, `wait_until_ready()`, `stop()` |
 | `hh::ColorSorter` | Throwing out the other alliance's pieces | `keep(hh::RED)` |
+| `hh::Pto` | Drive motors that shift to a hang or lift | `to_drive()`, `to_mechanism()` |
+| `hh::Sequence` | Several steps from one button press | `start()`, `cancel()` |
 
 Making one takes two lines in `robot-config.cpp` and two in `robot-config.h`:
 
@@ -165,3 +167,10 @@ All of JAR-Template's motions work, including `drive_to_point` and
 [JAR-Template docs](https://jacksonarearobotics.github.io/JAR-Template/), and
 "Smarter autons" in [GUIDE.md](GUIDE.md) for doing two things at once, flowing
 between motions and following curved paths.
+
+## What next
+
+[GUIDE.md](GUIDE.md) covers everything else: one-button sequences, tuning
+with the live tuner and graph, the match timer and endgame lock, driver
+profiles, wall resets, the ports page and map, a match-day checklist and a
+troubleshooting table.

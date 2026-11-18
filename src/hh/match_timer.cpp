@@ -1,3 +1,8 @@
+// Match timer: counts down driver control, buzzes the controller near the
+// end, and can hold back endgame actions until the last seconds.
+//
+// update() is called every 10 ms by the HHCode background task.
+
 #include "vex.h"
 
 namespace hh {

@@ -1,3 +1,9 @@
+// Live PID tuner: change the chassis constants from the controller and
+// re-run an auton without downloading again.
+//
+// While hh::tuner::enabled is true, hh::driver::update() calls update()
+// here instead of running the team's button bindings.
+
 #include "vex.h"
 
 namespace hh {
@@ -5,12 +11,14 @@ namespace tuner {
 
 bool enabled = false;
 
+// One line of the tuner menu: its name, the number it changes, and the step size.
 struct Item {
   const char* name;
   float* value;
   float step;
 };
 
+// The menu. Each entry points straight at a constant inside the chassis.
 static Item items[] = {
   {"Drive kP", &chassis.drive_kp, 0.05},
   {"Drive kI", &chassis.drive_ki, 0.005},
@@ -29,11 +37,15 @@ static Item items[] = {
 };
 static const int ITEM_COUNT = sizeof(items) / sizeof(items[0]);
 
+// current    which menu line is showing
+// running    a test auton is running right now
+// shown      the controller screen is up to date
 static int current = 0;
 static bool running = false;
 static bool shown = false;
 static vex::task test_task;
 
+// The task that runs the chosen auton when A is pressed.
 static int run_test() {
   selector::run_selected();
   chassis.wait();
@@ -43,6 +55,7 @@ static int run_test() {
   return 0;
 }
 
+// B: stops the test auton where it is and lets go of the drive.
 static void stop_test() {
   if (!running) return;
   test_task.stop();
@@ -57,6 +70,7 @@ void reset() {
   shown = false;
 }
 
+// Draws the three lines of the controller screen.
 static void show() {
   Controller.Screen.clearScreen();
   Controller.Screen.setCursor(1, 1);
@@ -67,6 +81,7 @@ static void show() {
   Controller.Screen.print(running ? "RUNNING  B:stop" : "A:run X:print");
 }
 
+// X: prints every constant as lines of code, ready to copy and paste.
 static void print_all() {
   printf("\n// Tuned constants. Paste into default_constants() in src/autons/constants.cpp\n");
   printf("chassis.set_drive_constants(%.1f, %.3f, %.3f, %.3f, %.1f);\n", chassis.drive_max_voltage,
@@ -81,6 +96,8 @@ static void print_all() {
   printf("chassis.turn_slew = %.1f;\n", chassis.turn_slew);
 }
 
+// Called every 20 ms in driver control while the tuner is on. Reads
+// the seven buttons it uses and works out which were pressed this loop.
 bool update() {
   static bool last[7] = {false, false, false, false, false, false, false};
   bool now[7] = {Controller.ButtonUp.pressing(),   Controller.ButtonDown.pressing(),

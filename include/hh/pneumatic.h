@@ -42,6 +42,10 @@ public:
 private:
   void apply();
 
+  // a_          the solenoid (always there)
+  // b_storage_  memory for a second solenoid; b_ points into it when used
+  // extended_   the state last asked for
+  // pulse_end_  when a pulse() should retract (0 = no pulse running)
   vex::digital_out a_;
   alignas(vex::digital_out) char b_storage_[sizeof(vex::digital_out)];
   vex::digital_out* b_ = nullptr;

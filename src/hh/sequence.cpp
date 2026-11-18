@@ -1,3 +1,9 @@
+// hh::Sequence: a list of steps that runs from one button press.
+//
+// Each sequence runs its steps in a background task of its own, so the
+// steps can wait (for a lift, for a timer) without stopping driver control.
+// Cancelling a sequence just stops that task.
+
 #include "vex.h"
 
 namespace hh {

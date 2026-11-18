@@ -94,6 +94,7 @@ private:
   static Chassis holonomic(int kind, int lf, int rf, int lb, int rb, int imu_port, float wheel_diameter,
                            vex::gearSetting cartridge, float wheel_rpm);
 
+  // Everything written on the "order form" (see chassis.cpp).
   int kind_ = 0;   // 0 tank, 1 mecanum, 2 X-drive
   std::vector<int> left_;
   std::vector<int> right_;
@@ -103,6 +104,7 @@ private:
   float wheel_rpm_ = 200;
   float gyro_scale_ = 360;
   float track_width_ = 0;
+  // Tracking wheels: whether there is one, what kind, where, and how big.
   bool forward_ = false, sideways_ = false;
   bool forward_is_encoder_ = false, sideways_is_encoder_ = false;
   int forward_port_ = 0, sideways_port_ = 0;

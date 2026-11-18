@@ -79,12 +79,16 @@ private:
   static bool in_range(float hue, float min, float max);
   void end_eject();
 
+  // The sensor, the color to keep, and how to throw a piece out.
   vex::optical* sensor_;
   Color keep_ = NO_COLOR;
   bool active_ = true;
   Action start_;
   Action finish_;
 
+  // Where the current piece is in the steps (see color_sorter.cpp):
+  // seen wrong -> flagged -> pending (waiting eject_delay) -> ejecting.
+  // The times are in ms since the program started.
   bool wrong_ = false;
   bool flagged_ = false;
   uint32_t wrong_since_ = 0;

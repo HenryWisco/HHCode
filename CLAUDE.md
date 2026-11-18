@@ -72,6 +72,20 @@ proposing features.
 - JAR only starts position tracking inside `set_coordinates()`. `hh::init()`
   now calls `set_coordinates(0, 0, 0)` on odom setups so the map works before
   any auton runs.
+- **The Brain tells tasks apart by their function.** Starting a task with a
+  function that is already running restarts it (the simulator copies this).
+  That is why `hh::Sequence` gives each sequence its own entry function
+  (`entry<0>` to `entry<7>`), and why there can only be 8 sequences.
+- Wall resets move the position with `chassis.odom.set_position()`, not
+  `set_coordinates()`, so the heading and the odom task are left alone.
+- `Subsystem::on_pause()` is what `hh::Pto` calls when it takes a mechanism's
+  motors. It defaults to `on_disable()`; `Positioner` overrides it to drop
+  its target (the motor encoders are meaningless after driving).
+- The overheat warning scans every smart port (`ports::temperature`), because
+  a motor group only reports its first motor.
+- In a mirrored auton, a wall sensor's facing and sideways offset are flipped
+  (the routine sees the robot as its mirror image). The field settings
+  (`odom_map::center_x` etc.) are not.
 - `vex.h` defines the global `wait(time, msec)`. Class methods can still be named `wait`.
 - VEX API reference: https://api.vex.com/v5/home/cpp/index.html
 

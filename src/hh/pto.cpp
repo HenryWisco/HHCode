@@ -1,3 +1,9 @@
+// hh::Pto: drive motors that a piston can shift over to a mechanism.
+//
+// The chassis keeps two lists, chassis.pto_left and chassis.pto_right, of
+// extra motors that drive with each side. Joining the drive means putting
+// the PTO motors in those lists; leaving means taking them out.
+
 #include "vex.h"
 
 namespace hh {
@@ -16,6 +22,7 @@ void Pto::use_piston(Pneumatic& piston, bool extended_is_drive) {
 
 void Pto::controls(Subsystem& mechanism) { mechanism_ = &mechanism; }
 
+// Does the shift, in an order that never has two things powering the motors.
 void Pto::apply(bool driving) {
   driving_ = driving;
 
@@ -54,8 +61,10 @@ void Pto::bind_toggle(Button button) {
   on_press(button, [this] { toggle(); });
 }
 
+// At start-up, put the PTO where the team said it starts.
 void Pto::init() { apply(start_on_drive); }
 
+// The hottest PTO motor, for the overheat warning.
 float Pto::temperature() {
   float hottest = 0;
   for (vex::motor* motor : left_) hottest = fmax(hottest, motor->temperature(vex::temperatureUnits::celsius));

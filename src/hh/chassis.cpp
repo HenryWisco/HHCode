@@ -1,3 +1,11 @@
+// hh::Chassis: the one-line chassis setup.
+//
+// A Chassis is a short-lived "order form". tank(), mecanum() or x_drive()
+// start the form, the optional add-ons (.odom(), .forward_tracker(), ...)
+// fill in more of it, and when the line ends the form is turned into
+// JAR-Template's real Drive object by operator Drive() at the bottom of
+// this file.
+
 #include "vex.h"
 
 namespace hh {
@@ -16,12 +24,14 @@ static int port_index(int port) {
   return number - 1;
 }
 
+// Top speed of each motor cartridge, used to work out the gear ratio.
 static float cartridge_rpm(vex::gearSetting cartridge) {
   if (cartridge == vex::gearSetting::ratio36_1) return 100;
   if (cartridge == vex::gearSetting::ratio6_1) return 600;
   return 200;
 }
 
+// Starts the form for a tank drive: just write everything down.
 Chassis Chassis::tank(std::initializer_list<int> left_ports, std::initializer_list<int> right_ports,
                       int imu_port, float wheel_diameter, vex::gearSetting cartridge, float wheel_rpm) {
   Chassis c;
@@ -35,6 +45,9 @@ Chassis Chassis::tank(std::initializer_list<int> left_ports, std::initializer_li
   return c;
 }
 
+// Mecanum and X-drive share this. JAR-Template wants a left and a right
+// motor group as well as the four separate wheels, so the left group is
+// the two left wheels and the right group the two right wheels.
 Chassis Chassis::holonomic(int kind, int lf, int rf, int lb, int rb, int imu_port, float wheel_diameter,
                            vex::gearSetting cartridge, float wheel_rpm) {
   Chassis c;
@@ -58,11 +71,15 @@ Chassis Chassis::x_drive(int left_front, int right_front, int left_back, int rig
   return holonomic(2, left_front, right_front, left_back, right_back, imu_port, wheel_diameter, cartridge, wheel_rpm);
 }
 
+// The add-ons. Each one notes its numbers and returns the same form
+// (*this) so another add-on can be chained after it.
 Chassis& Chassis::odom(float track_width) {
   track_width_ = track_width;
   return *this;
 }
 
+// JAR-Template reverses a tracking wheel by making its diameter
+// negative, so a negative port number is turned into that here.
 Chassis& Chassis::forward_tracker(int port, float diameter, float offset) {
   forward_ = true;
   forward_is_encoder_ = false;
@@ -111,6 +128,8 @@ Chassis& Chassis::gyro_scale(float degrees_per_turn) {
   return *this;
 }
 
+// Builds the real chassis. This runs once, when the line
+// "Drive chassis = hh::Chassis::tank(...);" finishes.
 Chassis::operator Drive() {
   built_kind = kind_;
 
@@ -165,6 +184,9 @@ Chassis::operator Drive() {
                sideways_port_, sideways_diameter_, sideways_offset_);
 }
 
+// mecanum() and x_drive() already know the drive type, so the team
+// doesn't have to set hh::driver::drive_type as well. hh::init() calls
+// this after configure_robot().
 void apply_chassis_drive_type() {
   if (built_kind == 1) driver::drive_type = MECANUM;
   if (built_kind == 2) driver::drive_type = X_DRIVE;

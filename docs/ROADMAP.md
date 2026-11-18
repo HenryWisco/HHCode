@@ -32,14 +32,23 @@ Written and compiling, **not yet tested on a robot**:
 - `hh::Chassis`: the chassis in one line, with plain port numbers
 - Odometry map on the Brain (position, heading and trail)
 - `hh::Pto`: drive motors that shift to a mechanism
+- `hh::Sequence`: one-button sequences (several steps from one press)
+- Match timer rumbles, endgame lock, and driver profiles
+- `hh::WallSensor` / `hh::wall_reset()`: position correction from distance
+  sensors facing the field walls
 
-Everything above passes the PC simulator tests in `tests/` (212 scenarios on
+Everything above passes the PC simulator tests in `tests/` (229 scenarios on
 tank, tank with odometry, mecanum and X-drive robots; see `tests/README.md`).
 The simulator checks logic, not hardware, so the robot test still matters.
 
-Not started (details in [SPEC.md](SPEC.md)):
+Ideas not started (Henry hasn't asked for these yet):
 
-- Henry's custom features (below)
+- Run an auton from the controller with a 15 / 60 second cut-off and a timer
+- Measuring helpers: guided routines for wheel size, gyro scale, tracker offsets
+- A single green / red "ready check" screen
+- HHCode version stamp on the Brain
+- Step-through auton (one motion per button press)
+- Match log to the SD card
 
 ## Design goals (from Henry)
 
@@ -115,7 +124,12 @@ background during a drive (e.g. lift to "high" while driving to a goal).
 
 ## Henry's custom features
 
-_To be filled in as Henry outlines them._
+Chosen by Henry on 2026-11-18 and built (simulator only so far):
+
+- One-button sequences (`hh::Sequence`)
+- Match timer rumbles and endgame lock (`hh::match_timer`), driver profiles
+  (`hh::profiles`)
+- Wall reset with distance sensors (`hh::WallSensor`, `hh::wall_reset()`)
 
 ## Prior art worth reading before we write each feature
 

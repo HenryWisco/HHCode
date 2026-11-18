@@ -51,7 +51,7 @@ template repo so every team gets the same fixes.
 - [Student setup guide](docs/SETUP.md): installing VS Code and the VEX extension
 - [Getting started](docs/GETTING-STARTED.md): configure your robot, buttons and first auton
 - [Chassis recipes](docs/CONFIG-RECIPES.md): copy-paste setups for tank, mecanum and X-drive
-- [Guide](docs/GUIDE.md): every feature and setting
+- [Guide](docs/GUIDE.md): how to use every feature, tuning, match-day checklist, troubleshooting
 - [Roadmap: what we're adding from EZ-Template](docs/ROADMAP.md)
 - [Spec and status table](docs/SPEC.md) and [tests](tests/README.md), for maintainers
 - [Credits and licenses](docs/CREDITS.md)

@@ -1,9 +1,18 @@
+// hh::Spinner: an intake, roller or conveyor.
+//
+// command_ is the speed the team asked for (-100 to 100, 0 = stopped).
+// Two things can borrow the motors for a moment and then give them back:
+//   an override   (the color sorter throwing a piece out)
+//   an unjam      (jam protection backing out)
+// update() runs every 10 ms and ends each of those when its time is up.
+
 #include "vex.h"
 
 namespace hh {
 
 Spinner::Spinner(vex::motor_group motors, int) : motors(motors) { name = "Spinner"; }
 
+// Sends a speed to the motors. Does not change what was "asked for".
 void Spinner::apply(float percent) {
   if (paused) return;   // the motors are doing something else (see hh::Pto)
   if (percent == 0) {
@@ -15,6 +24,8 @@ void Spinner::apply(float percent) {
   }
 }
 
+// Every command (spin, reverse, stop) ends up here. A change of speed
+// restarts the jam timers, so spin-up isn't mistaken for a jam.
 void Spinner::spin(float percent) {
   if (paused) percent = 0;
   percent = clamp(percent, -100, 100);
@@ -29,6 +40,7 @@ void Spinner::spin(float percent) {
   if (override_end_ == 0) apply(command_);
 }
 
+// Borrows the motors for `ms` milliseconds. update() gives them back.
 void Spinner::override_for(float percent, int ms) {
   if (paused) return;
   unjam_end_ = 0;
@@ -46,6 +58,9 @@ void Spinner::stop() { spin(0); }
 
 void Spinner::set_current_limit(float amps) { motors.setMaxTorque(amps, vex::currentUnits::amp); }
 
+// Button bindings. In the two-button forms each release checks which
+// way it is spinning, so letting go of one button doesn't stop a spin
+// the other button has just started.
 void Spinner::bind_hold(Button forward, Button backward) {
   while_held(forward, [this] { spin(); }, [this] { if (command_ > 0) stop(); });
   while_held(backward, [this] { reverse(); }, [this] { if (command_ < 0) stop(); });
@@ -90,11 +105,14 @@ void Spinner::update() {
     return;
   }
 
+  // Not spinning, or only just started: nothing to check yet.
   if (command_ == 0 || now - command_start_ < (uint32_t)jam_grace_time) {
     slow_since_ = 0;
     return;
   }
 
+  // Powered but barely turning for jam_time = jammed. Run the other way
+  // at full power for unjam_time.
   if (fabs(motors.velocity(vex::percent)) < jam_speed) {
     if (slow_since_ == 0) slow_since_ = now;
     if (now - slow_since_ >= (uint32_t)jam_time) {
@@ -107,6 +125,8 @@ void Spinner::update() {
   }
 }
 
+// Never start driver control, or come back from a disable, with the
+// intake still running from before.
 void Spinner::on_driver_start() { stop(); }
 
 void Spinner::on_disable() { stop(); }
