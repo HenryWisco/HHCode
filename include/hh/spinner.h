@@ -88,6 +88,12 @@ public:
 private:
   void apply(float percent);
 
+  // command_        the speed last asked for (percent)
+  // command_start_  when that speed was asked for
+  // slow_since_     when the motors were first seen barely turning (0 = not slow)
+  // unjam_end_      when backing out of a jam ends (0 = not unjamming)
+  // override_end_   when an override_for() ends (0 = none)
+  // Times are in ms since the program started.
   float command_ = 0;
   uint32_t command_start_ = 0;
   uint32_t slow_since_ = 0;

@@ -1,3 +1,9 @@
+// hh::Velocity: holds a mechanism (a flywheel) at an exact speed.
+//
+// update() runs every 10 ms. The voltage it sends has two parts:
+//   feedforward  the voltage that should give the target speed (kf)
+//   correction   extra voltage for however far off the speed really is (kp, ki)
+
 #include "vex.h"
 
 namespace hh {
@@ -7,6 +13,7 @@ Velocity::Velocity(vex::motor_group motors, float max_rpm, int)
   name = "Flywheel";
 }
 
+// Sets the target speed. 0 means stop.
 void Velocity::set_rpm(float rpm) {
   if (rpm == 0 || paused) {   // paused: the motors are doing something else (see hh::Pto)
     stop();
@@ -16,6 +23,7 @@ void Velocity::set_rpm(float rpm) {
   ready_ms_ = 0;
 }
 
+// Stops and clears the controller memory, so the next spin-up starts fresh.
 void Velocity::stop() {
   target_rpm_ = 0;
   integral_ = 0;
@@ -24,8 +32,10 @@ void Velocity::stop() {
   if (!paused) motors.stop(vex::brakeType::coast);
 }
 
+// The speed right now, in rpm of the mechanism (not the motor).
 float Velocity::rpm() { return motors.velocity(vex::percent) / 100.0 * max_rpm_; }
 
+// "Ready" = within ready_tolerance of the target for ready_time.
 bool Velocity::ready() const { return target_rpm_ != 0 && ready_ms_ >= ready_time; }
 
 void Velocity::wait_until_ready(int timeout_ms) {
@@ -50,6 +60,7 @@ void Velocity::update() {
   float wanted = kf * target_percent * 0.12 + kp * error + integral_;
   wanted = clamp(wanted, -12, 12);
 
+  // Optional ramp: limit how fast the voltage may change, to be gentle on gears.
   if (ramp > 0) {
     float step = ramp * 0.01;
     wanted = clamp(wanted, output_ - step, output_ + step);
@@ -57,6 +68,7 @@ void Velocity::update() {
   output_ = wanted;
   motors.spin(vex::fwd, output_, vex::volt);
 
+  // Count how long the speed has been on target. ready() reads this.
   if (fabs(error) / 100.0 * max_rpm_ <= ready_tolerance) {
     ready_ms_ += 10;
   } else {

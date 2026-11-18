@@ -159,6 +159,11 @@ void run(double ms) { sleep_ms(ms); }
 
 Robot robot;
 bool sd_inserted = true;
+double field_size = 144;
+double field_center_x = 0, field_center_y = 0;
+static double distance_blocked[22] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                                      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+void block_distance(int port, double inches) { distance_blocked[port] = inches; }
 bool imu_installed = true;
 V5_DeviceType devices[V5_MAX_DEVICE_PORTS] = {};
 double optical_hue = 100;
@@ -422,6 +427,29 @@ static void physics_step(double dt) {
   tracker_sideways_in += (strafe - omega * robot.sideways_tracker_offset) * dt;
 }
 
+// What the distance sensor on `port` really sees, in inches: the distance
+// along its beam to the nearest field wall, or to whatever is blocking it.
+// Negative when there is no such sensor or nothing is within its 2 m range.
+static double distance_reading(int port) {
+  for (const DistanceSensor& s : robot.distance_sensors) {
+    if (s.port != port) continue;
+    if (distance_blocked[port] >= 0) return distance_blocked[port];
+    double heading = robot.heading_deg * PI / 180.0;
+    double beam = heading + s.facing_deg * PI / 180.0;
+    double x = robot.x + s.forward * sin(heading) + s.right * cos(heading);
+    double y = robot.y + s.forward * cos(heading) - s.right * sin(heading);
+    double dx = sin(beam), dy = cos(beam);
+    double half = field_size / 2.0;
+    double best = 1e9;
+    if (dx > 1e-9) best = fmin(best, (field_center_x + half - x) / dx);
+    if (dx < -1e-9) best = fmin(best, (field_center_x - half - x) / dx);
+    if (dy > 1e-9) best = fmin(best, (field_center_y + half - y) / dy);
+    if (dy < -1e-9) best = fmin(best, (field_center_y - half - y) / dy);
+    return best <= 78.7 ? best : -1;
+  }
+  return -1;
+}
+
 }  // namespace sim
 
 /*---------------------------------------------------------------------------*/
@@ -572,6 +600,24 @@ double rotation::position(rotationUnits units) {
 void rotation::setPosition(double, rotationUnits) {
   if (_index == sim::robot.forward_tracker_port) sim::tracker_forward_zero = sim::tracker_forward_in;
   if (_index == sim::robot.sideways_tracker_port) sim::tracker_sideways_zero = sim::tracker_sideways_in;
+}
+
+bool distance::installed() {
+  for (const sim::DistanceSensor& s : sim::robot.distance_sensors) {
+    if (s.port == _index) return true;
+  }
+  return false;
+}
+
+bool distance::isObjectDetected() { return sim::distance_reading(_index) >= 0; }
+
+// Like the real sensor, it reports 9999 mm when it sees nothing.
+double distance::objectDistance(distanceUnits units) {
+  double inches = sim::distance_reading(_index);
+  double mm = inches >= 0 ? inches * 25.4 : 9999;
+  if (units == distanceUnits::in) return mm / 25.4;
+  if (units == distanceUnits::cm) return mm / 10.0;
+  return mm;
 }
 
 void digital_out::set(bool value) { sim::digital_outputs[_id] = value; }

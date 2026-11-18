@@ -45,6 +45,7 @@ enum class gearSetting { ratio36_1, ratio18_1, ratio6_1 };
 enum class fontType { mono20 = 0, mono30, mono40, mono60, prop20, prop30, prop40, prop60, mono15, mono12 };
 enum class controllerType { primary, partner };
 enum class ledState { off, on };
+enum class distanceUnits { mm, in, cm };
 
 constexpr percentUnits percent = percentUnits::pct;
 constexpr percentUnits pct = percentUnits::pct;
@@ -209,6 +210,16 @@ public:
   bool isNearObject();
   void setLight(ledState state);
   void setLightPower(int32_t intensity, percentUnits units = percentUnits::pct);
+};
+
+class distance {
+  int32_t _index;
+
+public:
+  distance(int32_t index) : _index(index) {}
+  bool installed();
+  double objectDistance(distanceUnits units);
+  bool isObjectDetected();
 };
 
 class triport {

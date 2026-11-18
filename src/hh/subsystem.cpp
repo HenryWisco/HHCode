@@ -1,3 +1,6 @@
+// The engine room of HHCode: the list of every mechanism, the background
+// task that keeps them all running, and hh::init() which starts everything.
+
 #include "vex.h"
 #include <vector>
 
@@ -9,6 +12,8 @@ static const int MAX_SUBSYSTEMS = 32;
 static Subsystem* subsystem_list[MAX_SUBSYSTEMS];
 static int subsystem_total = 0;
 
+// Every mechanism adds itself to the list as it is created, which is
+// how the background task knows about it without being told.
 Subsystem::Subsystem() {
   if (subsystem_total < MAX_SUBSYSTEMS) {
     subsystem_list[subsystem_total++] = this;
@@ -22,6 +27,7 @@ Subsystem* subsystem_at(int index) {
   return subsystem_list[index];
 }
 
+// One hh::when(): a condition, an action, and what the condition was last time.
 struct Trigger {
   std::function<bool()> condition;
   std::function<void()> action;
@@ -33,6 +39,7 @@ static std::vector<Trigger>& triggers() {
   return list;
 }
 
+// Adds a trigger to the list.
 void when(std::function<bool()> condition, std::function<void()> action) {
   triggers().push_back({condition, action, false});
 }
@@ -41,6 +48,10 @@ uint32_t now_ms() { return vex::timer::system(); }
 
 bool robot_enabled() { return Competition.isEnabled(); }
 
+// The background task. It runs for the whole program, every 10 ms:
+//   - when the robot has just been disabled, tell every mechanism
+//   - while enabled, call every mechanism's update() and check triggers
+//   - run the housekeeping (match timer, overheat, ports, map trail)
 static int background_task() {
   bool was_enabled = false;
   while (true) {
@@ -64,6 +75,7 @@ static int background_task() {
         trigger.last = now;
       }
     }
+    match_timer::update();
     driver::check_overheat();
     ports::check();
     odom_map::update();
@@ -72,6 +84,9 @@ static int background_task() {
   return 0;
 }
 
+// Calibrates the inertial sensor at start-up. The robot must stay still
+// for about 2 seconds; the message on the Brain says so. Gives up after
+// 5 seconds so a broken sensor can't stop the program starting.
 static void calibrate_inertial() {
   if (!chassis.Gyro.installed()) return;
   Brain.Screen.clearScreen();
@@ -87,6 +102,9 @@ static void calibrate_inertial() {
   Brain.Screen.clearScreen();
 }
 
+// Starts HHCode. Called once from pre_auton() in main.cpp. The order
+// matters: sensors are calibrated first, then mechanisms are put in
+// their starting state, then the background tasks begin.
 void init() {
   static bool started = false;
   if (started) return;
@@ -100,6 +118,7 @@ void init() {
   for (int i = 0; i < subsystem_total; i++) {
     subsystem_list[i]->init();
   }
+  profiles::start();
   driver::load_saved_curves();
   static vex::task background(background_task);
   ports::start();

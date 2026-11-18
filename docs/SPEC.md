@@ -60,7 +60,10 @@ run on a robot yet.
 | PTO | Port | `hh::Pto` | Sim (tank only) |
 | Update script (replace library folders, keep team files) | New | `tools/update-library` | Done (tested on copies of this repo) |
 | CI: run the simulator tests on GitHub | New | `.github/workflows` | Added |
-| Henry's own custom features | New | | Not listed yet |
+| One-button sequences | New | `hh::Sequence` | Sim |
+| Match timer rumbles, endgame lock | New | `hh/match_timer` | Sim |
+| Driver profiles (per-driver layout and curves, saved to SD) | New | `hh/profiles` | Sim |
+| Wall reset from distance sensors | New | `hh::WallSensor`, `hh::wall_reset()` | Sim |
 
 ## How the built API differs from the original plan
 
@@ -91,7 +94,7 @@ Drive chassis = hh::Chassis::tank({1, -2, 3}, {-4, 5, -6}, 10, 3.25, ratio6_1, 4
 
 ## Still open
 
-- Henry's own custom features (not listed yet).
+- More custom features, if Henry wants them (ideas are listed in ROADMAP.md).
 - Nothing has been run on a robot. See the on-robot check in `CLAUDE.md`.
 - Whether the VEX SDK can be downloaded in GitHub Actions for a CI build of the
   robot program (the simulator tests don't need it).

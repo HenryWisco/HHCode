@@ -1,3 +1,10 @@
+// Auton selector: the Brain screen that picks which autonomous routine
+// runs, plus the two extra pages opened from its blue bar (ports and map).
+//
+// register_autons() fills the list with add(). selector_task() runs the
+// whole time in the background: it watches for taps and controller arrows
+// and redraws the screen. autonomous() calls run_selected().
+
 #include "vex.h"
 
 namespace hh {
@@ -6,6 +13,7 @@ namespace selector {
 bool show_on_brain = true;
 bool use_controller = true;
 
+// One entry in the list. `mirrored` = run it flipped for the other side of the field.
 struct Auton {
   const char* name;
   const char* description;
@@ -13,6 +21,7 @@ struct Auton {
   bool mirrored;
 };
 
+// The list itself, how many are in it, and which one is chosen.
 static const int MAX_AUTONS = 24;
 static Auton autons[MAX_AUTONS];
 static int total = 0;
@@ -20,12 +29,14 @@ static int current = 0;
 
 static const char* SAVE_FILE = "hh_auton.txt";
 
+// Adds a routine to the end of the list.
 void add(const char* name, const char* description, void (*routine)()) {
   if (total < MAX_AUTONS) {
     autons[total++] = {name, description, routine, false};
   }
 }
 
+// Adds the same routine twice: once as written and once mirrored.
 void add_mirrored(const char* name, const char* mirrored_name, const char* description, void (*routine)()) {
   add(name, description, routine);
   if (total < MAX_AUTONS) {
@@ -49,6 +60,7 @@ static void save() {
   Brain.SDcard.savefile(SAVE_FILE, (uint8_t*)name, strlen(name));
 }
 
+// At start-up: find the saved name in the list and choose it again.
 static void load() {
   if (!Brain.SDcard.isInserted() || !Brain.SDcard.exists(SAVE_FILE)) return;
   char name[64] = {0};
@@ -58,6 +70,7 @@ static void load() {
   }
 }
 
+// Step through the list, wrapping round at the ends, and save the choice.
 void next() {
   if (total == 0) return;
   current = (current + 1) % total;
@@ -70,6 +83,7 @@ void previous() {
   save();
 }
 
+// Runs the chosen routine. This is what autonomous() calls.
 void run_selected() {
   if (total == 0) return;
   chassis.set_mirrored(autons[current].mirrored);
@@ -106,6 +120,7 @@ static void print_wrapped(const char* text, int x, int y, int line_height, int w
   }
 }
 
+// The battery and heading in the blue bar. Redrawn 4 times a second.
 static void draw_status() {
   Brain.Screen.setFont(vex::fontType::mono20);
   Brain.Screen.setFillColor(vex::color(0x1565C0));
@@ -115,6 +130,7 @@ static void draw_status() {
   Brain.Screen.setFillColor(vex::color::black);
 }
 
+// Draws the whole auton page.
 static void draw_screen() {
   Brain.Screen.clearScreen();
 
@@ -147,6 +163,13 @@ static void draw_screen() {
     print_wrapped(autons[current].description, 10, 128, 22, 46, 2);
   }
 
+  // Who is driving (only when driver profiles are set up). Tap it to change.
+  if (profiles::count() > 0) {
+    Brain.Screen.setFont(vex::fontType::mono20);
+    Brain.Screen.setPenColor(vex::color(0xFFEB3B));
+    Brain.Screen.printAt(250, 60, true, "Driver: %.12s >", profiles::selected_name());
+  }
+
   // Buttons
   Brain.Screen.setPenColor(vex::color(0x424242));
   Brain.Screen.setFillColor(vex::color(0x424242));
@@ -160,6 +183,7 @@ static void draw_screen() {
   Brain.Screen.setFillColor(vex::color::black);
 }
 
+// Shows the chosen auton (and driver) on the controller screen.
 static void draw_controller() {
   Controller.Screen.clearLine(1);
   Controller.Screen.setCursor(1, 1);
@@ -168,8 +192,18 @@ static void draw_controller() {
   } else {
     Controller.Screen.print("%d/%d %s", current + 1, total, autons[current].name);
   }
+  if (profiles::count() > 0) {
+    Controller.Screen.clearLine(2);
+    Controller.Screen.setCursor(2, 1);
+    Controller.Screen.print("Driver: %s", profiles::selected_name());
+  }
 }
 
+// The background task behind the screen. Each time round the loop it:
+//   1. steps aside if an auton or the PID graph is using the screen
+//   2. handles a tap (change page, change driver, previous / next auton)
+//   3. handles the controller arrows, when disabled on a field
+//   4. redraws whatever has changed
 static int selector_task() {
   int shown = -1;
   bool was_running_auton = false;
@@ -179,6 +213,9 @@ static int selector_task() {
   Page page = AUTONS;
   bool was_left = false;
   bool was_right = false;
+  bool was_up = false;
+  bool was_down = false;
+  int shown_profile = -1;
   uint32_t last_status = 0;
 
   while (true) {
@@ -239,7 +276,14 @@ static int selector_task() {
           vex::task::sleep(20);
           continue;
         }
-        if (Brain.Screen.xPosition() < 240) previous(); else next();
+        // "Driver: ..." on the right, just under the title bar.
+        if (profiles::count() > 0 && Brain.Screen.yPosition() < 76 && Brain.Screen.xPosition() >= 240) {
+          profiles::next();
+        } else if (Brain.Screen.xPosition() < 240) {
+          previous();
+        } else {
+          next();
+        }
       }
     }
 
@@ -250,10 +294,20 @@ static int selector_task() {
       if (right && !was_right) next();
       was_left = left;
       was_right = right;
+      // Up and Down pick the driver, when there are driver profiles.
+      bool up = Controller.ButtonUp.pressing();
+      bool down = Controller.ButtonDown.pressing();
+      if (profiles::count() > 0) {
+        if (up && !was_up) profiles::previous();
+        if (down && !was_down) profiles::next();
+      }
+      was_up = up;
+      was_down = down;
     }
 
-    if (shown != current) {
+    if (shown != current || shown_profile != profiles::selected()) {
       shown = current;
+      shown_profile = profiles::selected();
       if (show_on_brain) draw_screen();
       if (use_controller) draw_controller();
     } else if (show_on_brain && now_ms() - last_status > 250) {
@@ -266,6 +320,7 @@ static int selector_task() {
   return 0;
 }
 
+// Loads the saved choice and starts the background task. hh::init() calls this.
 void start() {
   load();
   static vex::task task(selector_task);

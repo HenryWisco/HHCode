@@ -1,3 +1,10 @@
+// hh::Positioner: moves a mechanism to a position and holds it there.
+//
+// update() runs every 10 ms and has three modes:
+//   IDLE      do nothing
+//   POSITION  run a PID loop toward target_
+//   MANUAL    send a fixed voltage (the driver is holding a button)
+
 #include "vex.h"
 
 namespace hh {
@@ -7,6 +14,7 @@ Positioner::Positioner(vex::motor_group motors, float gear_ratio, int)
   name = "Positioner";
 }
 
+// Remembers a named position. Returns the lift so presets can be chained.
 Positioner& Positioner::add_preset(const char* preset_name, float position) {
   if (preset_count_ < MAX_PRESETS) {
     presets_[preset_count_++] = {preset_name, position};
@@ -14,6 +22,8 @@ Positioner& Positioner::add_preset(const char* preset_name, float position) {
   return *this;
 }
 
+// Looks the name up and goes there. A name that doesn't exist is a
+// typing mistake, so say so in the VS Code terminal.
 void Positioner::go_to(const char* preset_name) {
   for (int i = 0; i < preset_count_; i++) {
     if (strcmp(presets_[i].name, preset_name) == 0) {
@@ -24,6 +34,7 @@ void Positioner::go_to(const char* preset_name) {
   printf("%s: no preset called \"%s\"\n", name, preset_name);
 }
 
+// Starts a move: set the target and reset the PID memory.
 void Positioner::go_to(float position) {
   if (paused) return;   // the motors are doing something else (see hh::Pto)
   if (use_limits) position = clamp(position, min_position, max_position);
@@ -34,6 +45,7 @@ void Positioner::go_to(float position) {
   mode_ = POSITION;
 }
 
+// Pauses the auton until the mechanism has arrived (or time runs out).
 void Positioner::wait(int timeout_ms) {
   uint32_t start = now_ms();
   while (!is_settled() && now_ms() - start < (uint32_t)timeout_ms) {
@@ -41,6 +53,7 @@ void Positioner::wait(int timeout_ms) {
   }
 }
 
+// Stay exactly here: a move to the current position.
 void Positioner::hold() { go_to(position()); }
 
 void Positioner::move(float voltage) {
@@ -54,6 +67,8 @@ void Positioner::stop() {
   if (!paused) motors.stop(vex::brakeType::coast);
 }
 
+// Renames the current position. offset_ is the difference between what
+// the sensor reads and what we call the position.
 void Positioner::zero(float position) {
   offset_ = 0;
   offset_ = position - this->position();
@@ -72,18 +87,24 @@ void Positioner::use_rotation_sensor(vex::rotation& sensor, float sensor_ratio) 
   sensor_ratio_ = sensor_ratio;
 }
 
+// Where the mechanism is, in degrees of the mechanism: motor degrees
+// times the gear ratio (or the rotation sensor), plus the zero offset.
 float Positioner::position() {
   float raw = sensor_ != nullptr ? sensor_->position(vex::deg) * sensor_ratio_
                                  : motors.position(vex::deg) * gear_ratio_;
   return raw + offset_;
 }
 
+// "There" = within settle_error of the target for settle_time.
 bool Positioner::is_settled() const { return mode_ == POSITION && settled_ms_ >= settle_time; }
 
 void Positioner::bind_preset(Button button, const char* preset_name) {
   on_press(button, [this, preset_name] { go_to(preset_name); });
 }
 
+// Hold a button to move, let go to hold position. The release action
+// checks that it is still the one moving the mechanism, so letting go
+// of "up" doesn't cancel a "down" the driver has just started.
 void Positioner::bind_manual(Button up, Button down, float voltage) {
   while_held(up, [this, voltage] { move(voltage); },
              [this] { if (mode_ == MANUAL && manual_voltage_ > 0) hold(); });
@@ -91,6 +112,9 @@ void Positioner::bind_manual(Button up, Button down, float voltage) {
              [this] { if (mode_ == MANUAL && manual_voltage_ < 0) hold(); });
 }
 
+// Extra voltage to cancel gravity. kg is constant (elevator lifts).
+// kg_arm is biggest when the arm is level and fades as it points up or
+// down, which is what the cosine does.
 float Positioner::feedforward(float position) {
   return kg + kg_arm * cos(to_rad(position - arm_level_position));
 }
@@ -110,6 +134,10 @@ void Positioner::update() {
     return;
   }
 
+  // The PID loop.
+  //   P: push in proportion to how far away it is
+  //   I: build up extra push while it stays a little off (only when close)
+  //   D: ease off when it is approaching quickly
   float error = target_ - current;
   if (fabs(error) < starti) integral_ += error;
   if ((error > 0) != (previous_error_ > 0)) integral_ = 0;
@@ -119,12 +147,18 @@ void Positioner::update() {
   output = clamp(output, -max_voltage, max_voltage) + feedforward(current);
   motors.spin(vex::fwd, clamp(output, -12, 12), vex::volt);
 
+  // Count how long it has been close enough. is_settled() reads this.
   if (fabs(error) < settle_error) {
     settled_ms_ += 10;
   } else {
     settled_ms_ = 0;
   }
 }
+
+// hh::Pto is about to use these motors to drive. While they do, the motor
+// encoders turn with the wheels, so the old target would be meaningless (and
+// the mechanism would lunge for it) when the motors come back.
+void Positioner::on_pause() { mode_ = IDLE; }
 
 float Positioner::temperature() { return motors.temperature(vex::temperatureUnits::celsius); }
 

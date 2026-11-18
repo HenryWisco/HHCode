@@ -33,6 +33,12 @@ Drive chassis(
 Drive chassis = hh::Chassis::tank({-1, -2}, {3, 4}, 10, 3.25, ratio6_1, 360)
                   .forward_tracker(12, 2.75, -2)
                   .sideways_tracker(13, 2.75, 5.5);
+
+// Wall sensors: one on the front, one on the left side toward the back.
+distance FrontDistance = distance(PORT7);
+distance LeftDistance = distance(PORT8);
+hh::WallSensor front_wall(FrontDistance, hh::FRONT, 6.5, 1);
+hh::WallSensor left_wall(LeftDistance, hh::LEFT, -2, -5.5);
 #endif
 
 void describe_robot() {
@@ -50,6 +56,9 @@ void describe_robot() {
   r.sideways_tracker_port = PORT13;
   r.sideways_tracker_offset = 5.5;
   r.tracker_diameter = 2.75;
+#if SIM_CONFIG == 2
+  r.distance_sensors = {{PORT7, 6.5, 1, 0}, {PORT8, -2, -5.5, 270}};
+#endif
   for (int port = PORT1; port <= PORT4; port++) sim::motor(port).cartridge = ratio6_1;
 #if SIM_CONFIG == 1
   sim::motor(INTAKE_PORT).cartridge = ratio6_1;
@@ -77,9 +86,27 @@ motor PtoLeft = motor(PORT19, ratio6_1, true);
 motor PtoRight = motor(PORT20, ratio6_1, false);
 hh::Pneumatic pto_piston(Brain.ThreeWirePort.D);
 hh::Spinner winch(PtoLeft, PtoRight);
+// The same two motors as a lift, for the test that puts a Positioner on a PTO.
+hh::Positioner winch_arm(PtoLeft, PtoRight);
 hh::Pto pto(PtoLeft, PtoRight);
 
+// One-button sequences. The first works mechanisms, the second drives.
+int sequence_cancels = 0;
+hh::Sequence score_high([] {
+  lift.go_to("high");
+  lift.wait();
+  intake.reverse();
+  wait(400, msec);
+  intake.stop();
+  lift.go_to("down");
+});
+hh::Sequence back_up([] {
+  chassis.drive_distance(-12);
+  chassis.turn_to_angle(90);
+});
+
 int b_presses = 0;
+int endgame_presses = 0;
 int y_state = 0;
 bool when_flag = false;
 int when_fires = 0;
@@ -102,9 +129,21 @@ void configure_robot() {
   pto.use_piston(pto_piston);
   pto.controls(winch);
   pto.bind_toggle(hh::shifted(Controller.ButtonL2, Controller.ButtonA));
+  score_high.on_cancel = [] { intake.stop(); sequence_cancels++; };
+  score_high.bind(hh::shifted(Controller.ButtonL2, Controller.ButtonB));
+  back_up.uses_chassis = true;
+  back_up.bind(hh::shifted(Controller.ButtonL2, Controller.ButtonY));
+  hh::on_press(hh::shifted(Controller.ButtonL2, Controller.ButtonX),
+               hh::match_timer::endgame_only([] { endgame_presses++; }));
   hh::on_press(Controller.ButtonB, [] { b_presses++; });
   hh::toggle(Controller.ButtonY, [] { y_state = 1; }, [] { y_state = 2; });
   hh::when([] { return when_flag; }, [] { when_fires++; });
+#endif
+#if SIM_CONFIG == 2
+  // Driver profiles: Alex drives with the settings above, the others differ.
+  hh::profiles::add("Alex");
+  hh::profiles::add("Sam", hh::TANK_STICKS, 3, 2);
+  hh::profiles::add("Jo", [] { hh::driver::turn_scale = 0.5; });
 #endif
 }
 

@@ -34,6 +34,11 @@ public:
   virtual void on_driver_start() {}
   /** Runs once each time the robot is disabled (between match periods). */
   virtual void on_disable() {}
+  /**
+   * Runs when hh::Pto takes this mechanism's motors away to drive with.
+   * Unless a block says otherwise, that is handled like a disable.
+   */
+  virtual void on_pause() { on_disable(); }
   /** Hottest motor in degrees C, or 0 if this mechanism has no motors. */
   virtual float temperature() { return 0; }
 };

@@ -96,6 +96,8 @@ public:
   void bind_manual(Button up, Button down, float voltage = 12);
 
   void update() override;
+  /** Forgets the target, so it doesn't jump back to it when the motors return. */
+  void on_pause() override;
   float temperature() override;
 
   /** The motors, for anything this class doesn't cover. */
@@ -114,11 +116,15 @@ private:
   Preset presets_[MAX_PRESETS];
   int preset_count_ = 0;
 
+  // How position is measured: the gear ratio, an optional rotation
+  // sensor, and the offset set by zero().
   float gear_ratio_;
   vex::rotation* sensor_ = nullptr;
   float sensor_ratio_ = 1;
   float offset_ = 0;
 
+  // What it is doing now, and the PID loop's memory between updates.
+  // settled_ms_ counts how long it has been within settle_error.
   Mode mode_ = IDLE;
   float target_ = 0;
   float manual_voltage_ = 0;

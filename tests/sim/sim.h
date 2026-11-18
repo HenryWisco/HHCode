@@ -27,6 +27,13 @@ struct MotorState {
 
 enum DriveKind { SIM_TANK, SIM_MECANUM, SIM_X_DRIVE };
 
+/** A distance sensor bolted to the robot. */
+struct DistanceSensor {
+  int port;
+  double forward, right;   // inches from the robot's center
+  double facing_deg;       // clockwise from straight ahead
+};
+
 /** The physical robot. Filled in by describe_robot() in robot.cpp. */
 struct Robot {
   DriveKind kind = SIM_TANK;
@@ -45,6 +52,7 @@ struct Robot {
   double sideways_tracker_offset = 0;   // inches behind center
   double tracker_diameter = 2.75;
   bool blocked = false;        // pinned against a wall: the drive wheels can't turn
+  std::vector<DistanceSensor> distance_sensors;
 
   // True position on the field. Heading is clockwise from +Y, like JAR-Template.
   double x = 0, y = 0, heading_deg = 0;
@@ -54,6 +62,16 @@ struct Robot {
 
 extern Robot robot;
 extern bool sd_inserted;
+// The field walls, in the same coordinates as robot.x and robot.y. The robot
+// starts at (0, 0), so by default it starts in the middle of the field.
+extern double field_size;
+extern double field_center_x, field_center_y;
+/**
+ * Something standing in front of a distance sensor: the sensor on `port`
+ * reads `inches` instead of the distance to the wall. A negative number
+ * takes the object away again.
+ */
+void block_distance(int port, double inches);
 extern bool imu_installed;
 // The optical sensor: what is in front of it, and whether its light is on.
 extern double optical_hue;

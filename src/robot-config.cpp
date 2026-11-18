@@ -148,6 +148,18 @@ PORT3,     -PORT4,
 /*    hh::Pneumatic  mogo_clamp(Brain.ThreeWirePort.A);                      */
 /*    hh::ColorSorter sorter(RingSensor);                                    */
 /*    hh::Pto        pto(LeftPtoMotor, RightPtoMotor);                       */
+/*    hh::WallSensor front_wall(FrontDistance, hh::FRONT, 6.5, 0);           */
+/*                                                                           */
+/*  A one-button sequence is several steps from one press, written like an   */
+/*  auton:                                                                   */
+/*                                                                           */
+/*    hh::Sequence score_high([] {                                           */
+/*      lift.go_to("high");                                                  */
+/*      lift.wait();                                                         */
+/*      intake.reverse();                                                    */
+/*      wait(400, msec);                                                     */
+/*      intake.stop();                                                       */
+/*    });                                                                    */
 /*---------------------------------------------------------------------------*/
 
 // Add your mechanisms here:
@@ -195,6 +207,19 @@ void configure_robot() {
   //   lift.add_preset("down", 0).add_preset("high", 110);
   //   lift.bind_preset(Controller.ButtonUp, "high");
   //   lift.bind_preset(Controller.ButtonDown, "down");
+  //   score_high.bind(Controller.ButtonB);           // a one-button sequence
+  //
+  // Any button can run any code:
+  //   hh::on_press(Controller.ButtonB, [] { intake.spin(40); });
+  // A shift key doubles your buttons ("R1 while holding L2"):
+  //   wing.bind_hold(hh::shifted(Controller.ButtonL2, Controller.ButtonR1));
+
+  // Match extras (all optional; see docs/GUIDE.md, section 6):
+  //   hh::match_timer::driver_length = 60;           // driver skills instead of a match
+  //   hh::on_press(Controller.ButtonX,               // only works in the last 30 seconds
+  //                hh::match_timer::endgame_only([] { hang.extend(); }));
+  //   hh::profiles::add("Alex");                     // one line per driver
+  //   hh::profiles::add("Sam", hh::TANK_STICKS, 3, 3);
 
 }
 

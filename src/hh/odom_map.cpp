@@ -1,3 +1,8 @@
+// Odometry map: draws where the robot thinks it is on the Brain screen.
+//
+// update() (background task) records a trail of where the robot has been.
+// draw() (selector task) draws the field, the trail and the robot.
+
 #include "vex.h"
 
 namespace hh {
@@ -17,6 +22,7 @@ static int trail_count = 0;
 // The map is a square on the left of the screen.
 static const int MAP_LEFT = 6, MAP_TOP = 34, MAP_SIZE = 200;
 
+// Position tracking exists on every chassis setup except this one.
 static bool has_odom() { return chassis.drive_setup != ZERO_TRACKER_NO_ODOM; }
 
 void clear_trail() {
@@ -26,6 +32,8 @@ void clear_trail() {
 
 int trail_points() { return trail_count; }
 
+// Adds a point to the trail when the robot has moved at least 1.5
+// inches since the last one. Checked every 20 ms.
 void update() {
   static uint32_t last_check = 0;
   uint32_t time = now_ms();
@@ -52,10 +60,12 @@ void update() {
 static int screen_x(float x) { return MAP_LEFT + (int)((x - center_x + field_size / 2) / field_size * MAP_SIZE); }
 static int screen_y(float y) { return MAP_TOP + MAP_SIZE - (int)((y - center_y + field_size / 2) / field_size * MAP_SIZE); }
 
+// Is this field position inside the square the map shows?
 static bool on_map(float x, float y) {
   return fabs(x - center_x) <= field_size / 2 && fabs(y - center_y) <= field_size / 2;
 }
 
+// Draws a line between two field positions, skipping any that leave the map.
 static void line(float x1, float y1, float x2, float y2) {
   if (!on_map(x1, y1) || !on_map(x2, y2)) return;
   Brain.Screen.drawLine(screen_x(x1), screen_y(y1), screen_x(x2), screen_y(y2));
@@ -126,6 +136,24 @@ void draw() {
     Brain.Screen.printAt(222, 200, false, "Robot is off the map");
   } else if (chassis.is_mirrored()) {
     Brain.Screen.printAt(222, 200, false, "Mirrored auton");
+  }
+
+  // Wall sensors, if the robot has any: the first letter of where each one
+  // points and what it reads in inches ("--" when it sees nothing).
+  if (walls::sensor_count() > 0) {
+    static const char FACING_LETTERS[] = {'F', 'R', 'B', 'L'};
+    char text[40] = "Walls";
+    int length = 5;
+    for (int i = 0; i < walls::sensor_count() && length < 30; i++) {
+      WallSensor* sensor = walls::sensor_at(i);
+      float reading = sensor->inches();
+      if (reading < 0) {
+        length += snprintf(text + length, sizeof(text) - length, " %c--", FACING_LETTERS[sensor->facing()]);
+      } else {
+        length += snprintf(text + length, sizeof(text) - length, " %c%.0f", FACING_LETTERS[sensor->facing()], reading);
+      }
+    }
+    Brain.Screen.printAt(222, 228, false, "%s", text);
   }
 }
 

@@ -67,6 +67,10 @@ public:
 private:
   void apply(bool driving);
 
+  // left_ / right_   the PTO motors on each side
+  // piston_          the piston that shifts them (optional)
+  // mechanism_       what they power when off the drive (optional)
+  // driving_         where they are now: true = on the drive
   std::vector<vex::motor*> left_;
   std::vector<vex::motor*> right_;
   Pneumatic* piston_ = nullptr;

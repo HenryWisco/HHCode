@@ -1,3 +1,10 @@
+// Port check: what is plugged into each smart port, and whether anything
+// has come unplugged since the program started.
+//
+// The VEX C function vexDeviceGetStatus() fills an array with the kind of
+// device on every port. start() keeps a copy from start-up (at_start);
+// everything else compares the latest reading (now) with it.
+
 #include "vex.h"
 
 namespace hh {
@@ -11,8 +18,10 @@ static V5_DeviceType now[V5_MAX_DEVICE_PORTS];
 static bool started = false;
 static bool warned[PORT_COUNT];
 
+// Refreshes `now` from the Brain.
 static void read() { vexDeviceGetStatus(now); }
 
+// A short name for each kind of device, to fit in a box on the screen.
 static const char* type_name(V5_DeviceType type) {
   switch (type) {
     case kDeviceTypeNoSensor: return "";
@@ -30,6 +39,7 @@ static const char* type_name(V5_DeviceType type) {
   }
 }
 
+// Port numbers here are 1 to 21, as printed on the Brain.
 static bool valid(int port) { return port >= 1 && port <= PORT_COUNT; }
 
 const char* name(int port) {
@@ -57,6 +67,9 @@ void start() {
   started = true;
 }
 
+// Twice a second: has a port that had a device at start-up gone empty?
+// Warn once per unplugging, and again only if it is plugged back in
+// and then drops out again.
 void check() {
   static uint32_t last_check = 0;
   uint32_t time = now_ms();
@@ -75,6 +88,8 @@ void check() {
   }
 }
 
+// Draws all 21 ports as a grid of boxes: grey = empty, green = fine,
+// orange = hot motor, red = was plugged in and has gone.
 void draw() {
   read();
   Brain.Screen.clearScreen();
