@@ -1932,6 +1932,57 @@ TEST(wall_reset_in_a_mirrored_auton_and_on_the_map) {
 #endif
 
 /*---------------------------------------------------------------------------*/
+/*  Found in the code review                                                 */
+/*---------------------------------------------------------------------------*/
+
+#if SIM_CONFIG == 1
+TEST(pto_positioner_forgets_its_target_while_the_motors_drive) {
+  pto.start_on_drive = false;
+  boot();
+  pto.controls(winch_arm);                   // after boot: configure_robot() gives the PTO the winch
+  sim::set_mode(sim::DRIVER);
+  winch_arm.go_to(90);
+  sim::run(1500);
+  CHECK_NEAR(winch_arm.position(), 90, 5);
+
+  pto.to_drive();                            // the motors go and drive for a while
+  sim::set_axis(3, 100);
+  sim::run(1000);
+  sim::set_axis(3, 0);
+  sim::run(300);
+
+  pto.to_mechanism();                        // back on the arm: it must not lunge for 90
+  sim::run(300);
+  CHECK(sim::motor(PTO_LEFT_PORT).command == sim::MotorState::STOPPED);
+  CHECK(!winch_arm.is_settled());
+
+  winch_arm.go_to(winch_arm.position() + 30);   // and it still works when asked
+  sim::run(100);
+  CHECK(sim::motor(PTO_LEFT_PORT).command == sim::MotorState::VOLTAGE);
+}
+
+TEST(overheat_warning_sees_every_drive_motor) {
+  for (int port = vex::PORT1; port <= vex::PORT4; port++) sim::devices[port] = kDeviceTypeMotorSensor;
+  boot();
+  sim::set_mode(sim::DRIVER);
+  sim::run(1500);
+  CHECK(sim::rumbles() == 0);
+  sim::motor(vex::PORT2).temperature = 61;   // the second motor of the left side
+  sim::run(1500);
+  CHECK(sim::rumbles() == 1);
+  CHECK(contains(sim::controller_line(3), "HOT: Port 2 61C"));
+}
+#endif
+
+TEST(chassis_builder_survives_bad_port_numbers) {
+  boot();
+  Drive odd = hh::Chassis::tank({0, 25}, {-30}, 0, 4, ratio18_1, 200);
+  CHECK(odd.drive_setup == ZERO_TRACKER_NO_ODOM);
+  odd.drive_with_voltage(3, 3);              // lands on real ports instead of crashing
+  CHECK(sim::motor(vex::PORT21).command == sim::MotorState::VOLTAGE);
+}
+
+/*---------------------------------------------------------------------------*/
 /*  Runner                                                                   */
 /*---------------------------------------------------------------------------*/
 

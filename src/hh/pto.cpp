@@ -23,7 +23,7 @@ void Pto::apply(bool driving) {
   // way when the piston moves.
   if (mechanism_ != nullptr) {
     // Going to the drive: let the mechanism forget what it was doing first.
-    if (driving && !mechanism_->paused) mechanism_->on_disable();
+    if (driving && !mechanism_->paused) mechanism_->on_pause();
     mechanism_->paused = driving;
   }
   chassis.pto_left.clear();

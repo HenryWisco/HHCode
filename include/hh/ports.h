@@ -5,8 +5,8 @@ namespace hh {
 /**
  * Port check. Knows what is plugged into each of the Brain's 21 smart ports.
  *
- * - Tap the title bar of the auton screen to see every port: what is plugged
- *   in and how hot each motor is. Tap again to go back.
+ * - Tap "Ports>" in the blue bar of the auton screen to see every port: what
+ *   is plugged in and how hot each motor is. Tap again to go back.
  * - If something that was plugged in when the program started stops
  *   answering (a cable pulled out, a dead motor), the controller rumbles and
  *   shows which port.

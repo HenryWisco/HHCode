@@ -126,6 +126,11 @@ void Positioner::update() {
   }
 }
 
+// hh::Pto is about to use these motors to drive. While they do, the motor
+// encoders turn with the wheels, so the old target would be meaningless (and
+// the mechanism would lunge for it) when the motors come back.
+void Positioner::on_pause() { mode_ = IDLE; }
+
 float Positioner::temperature() { return motors.temperature(vex::temperatureUnits::celsius); }
 
 }  // namespace hh

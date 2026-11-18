@@ -5,7 +5,16 @@ namespace hh {
 // Which drive type the builder made: -1 = the builder wasn't used.
 static int built_kind = -1;
 
-static int port_index(int port) { return abs(port) - 1; }   // 1..21 -> PORT1..PORT21
+// Turns a port number as a student writes it (1 to 21, negative = reversed)
+// into the number the VEX API uses (PORT1 is 0, PORT2 is 1, ...). A number
+// outside 1 to 21 is a typing mistake; it is pulled back into range so it
+// can't crash the program, and the ports page will show nothing plugged in.
+static int port_index(int port) {
+  int number = abs(port);
+  if (number < 1) number = 1;
+  if (number > 21) number = 21;
+  return number - 1;
+}
 
 static float cartridge_rpm(vex::gearSetting cartridge) {
   if (cartridge == vex::gearSetting::ratio36_1) return 100;

@@ -27,6 +27,7 @@ extern hh::Pneumatic ejector;
 extern hh::ColorSorter sorter;
 extern hh::Pneumatic pto_piston;
 extern hh::Spinner winch;
+extern hh::Positioner winch_arm;
 extern hh::Pto pto;
 const int PTO_LEFT_PORT = vex::PORT19;
 const int PTO_RIGHT_PORT = vex::PORT20;

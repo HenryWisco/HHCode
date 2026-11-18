@@ -96,6 +96,8 @@ public:
   void bind_manual(Button up, Button down, float voltage = 12);
 
   void update() override;
+  /** Forgets the target, so it doesn't jump back to it when the motors return. */
+  void on_pause() override;
   float temperature() override;
 
   /** The motors, for anything this class doesn't cover. */

@@ -252,6 +252,18 @@ void check_overheat() {
     }
   }
 
+  // A motor group only reports its first motor, and the drive has several.
+  // Check every smart port too, so no hot motor is missed.
+  static char port_name[12];
+  for (int port = 1; port <= 21; port++) {
+    float temperature = ports::temperature(port);
+    if (temperature > hottest) {
+      hottest = temperature;
+      snprintf(port_name, sizeof(port_name), "Port %d", port);
+      hottest_name = port_name;
+    }
+  }
+
   if (hottest >= overheat_temp && (last_warning == 0 || now - last_warning > 15000)) {
     last_warning = now;
     Controller.rumble("- -");

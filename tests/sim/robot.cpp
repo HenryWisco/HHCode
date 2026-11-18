@@ -86,6 +86,8 @@ motor PtoLeft = motor(PORT19, ratio6_1, true);
 motor PtoRight = motor(PORT20, ratio6_1, false);
 hh::Pneumatic pto_piston(Brain.ThreeWirePort.D);
 hh::Spinner winch(PtoLeft, PtoRight);
+// The same two motors as a lift, for the test that puts a Positioner on a PTO.
+hh::Positioner winch_arm(PtoLeft, PtoRight);
 hh::Pto pto(PtoLeft, PtoRight);
 
 // One-button sequences. The first works mechanisms, the second drives.
