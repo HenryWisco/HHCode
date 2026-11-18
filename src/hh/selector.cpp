@@ -147,6 +147,13 @@ static void draw_screen() {
     print_wrapped(autons[current].description, 10, 128, 22, 46, 2);
   }
 
+  // Who is driving (only when driver profiles are set up). Tap it to change.
+  if (profiles::count() > 0) {
+    Brain.Screen.setFont(vex::fontType::mono20);
+    Brain.Screen.setPenColor(vex::color(0xFFEB3B));
+    Brain.Screen.printAt(250, 60, true, "Driver: %.12s >", profiles::selected_name());
+  }
+
   // Buttons
   Brain.Screen.setPenColor(vex::color(0x424242));
   Brain.Screen.setFillColor(vex::color(0x424242));
@@ -168,6 +175,11 @@ static void draw_controller() {
   } else {
     Controller.Screen.print("%d/%d %s", current + 1, total, autons[current].name);
   }
+  if (profiles::count() > 0) {
+    Controller.Screen.clearLine(2);
+    Controller.Screen.setCursor(2, 1);
+    Controller.Screen.print("Driver: %s", profiles::selected_name());
+  }
 }
 
 static int selector_task() {
@@ -179,6 +191,9 @@ static int selector_task() {
   Page page = AUTONS;
   bool was_left = false;
   bool was_right = false;
+  bool was_up = false;
+  bool was_down = false;
+  int shown_profile = -1;
   uint32_t last_status = 0;
 
   while (true) {
@@ -239,7 +254,14 @@ static int selector_task() {
           vex::task::sleep(20);
           continue;
         }
-        if (Brain.Screen.xPosition() < 240) previous(); else next();
+        // "Driver: ..." on the right, just under the title bar.
+        if (profiles::count() > 0 && Brain.Screen.yPosition() < 76 && Brain.Screen.xPosition() >= 240) {
+          profiles::next();
+        } else if (Brain.Screen.xPosition() < 240) {
+          previous();
+        } else {
+          next();
+        }
       }
     }
 
@@ -250,10 +272,20 @@ static int selector_task() {
       if (right && !was_right) next();
       was_left = left;
       was_right = right;
+      // Up and Down pick the driver, when there are driver profiles.
+      bool up = Controller.ButtonUp.pressing();
+      bool down = Controller.ButtonDown.pressing();
+      if (profiles::count() > 0) {
+        if (up && !was_up) profiles::previous();
+        if (down && !was_down) profiles::next();
+      }
+      was_up = up;
+      was_down = down;
     }
 
-    if (shown != current) {
+    if (shown != current || shown_profile != profiles::selected()) {
       shown = current;
+      shown_profile = profiles::selected();
       if (show_on_brain) draw_screen();
       if (use_controller) draw_controller();
     } else if (show_on_brain && now_ms() - last_status > 250) {

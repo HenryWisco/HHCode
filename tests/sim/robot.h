@@ -12,6 +12,11 @@
 /** Tells the simulator what the robot physically is. */
 void describe_robot();
 
+#if SIM_CONFIG == 2
+extern hh::WallSensor front_wall;
+extern hh::WallSensor left_wall;
+#endif
+
 #if SIM_CONFIG == 1
 extern hh::Spinner intake;
 extern hh::Positioner lift;
@@ -25,6 +30,10 @@ extern hh::Spinner winch;
 extern hh::Pto pto;
 const int PTO_LEFT_PORT = vex::PORT19;
 const int PTO_RIGHT_PORT = vex::PORT20;
+extern hh::Sequence score_high;
+extern hh::Sequence back_up;
+extern int sequence_cancels;
+extern int endgame_presses;
 extern int b_presses;
 extern int y_state;
 extern bool when_flag;

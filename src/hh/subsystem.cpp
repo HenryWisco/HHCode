@@ -64,6 +64,7 @@ static int background_task() {
         trigger.last = now;
       }
     }
+    match_timer::update();
     driver::check_overheat();
     ports::check();
     odom_map::update();
@@ -100,6 +101,7 @@ void init() {
   for (int i = 0; i < subsystem_total; i++) {
     subsystem_list[i]->init();
   }
+  profiles::start();
   driver::load_saved_curves();
   static vex::task background(background_task);
   ports::start();

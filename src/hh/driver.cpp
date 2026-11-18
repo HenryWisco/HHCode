@@ -14,7 +14,22 @@ float active_brake_kp = 0;
 float overheat_temp = 55;
 bool curve_tuning = false;
 
-static const char* CURVE_FILE = "hh_curves.txt";
+// The SD card file the live-tuned curves are kept in. With driver profiles,
+// each driver gets a file of their own, named after them.
+static const char* curve_file() {
+  static char file[40];
+  if (profiles::count() == 0) return "hh_curves.txt";
+  // Keep only letters and digits of the name, so it is a safe file name.
+  char safe[13];
+  int length = 0;
+  for (const char* c = profiles::selected_name(); *c != 0 && length < 12; c++) {
+    bool letter_or_digit = (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9');
+    if (letter_or_digit) safe[length++] = *c;
+  }
+  safe[length] = 0;
+  snprintf(file, sizeof(file), "hh_curves_%s.txt", safe);
+  return file;
+}
 
 static float field_offset = 0;
 static bool braking = false;
@@ -149,13 +164,13 @@ static void save_curves() {
   if (!Brain.SDcard.isInserted()) return;
   char text[40];
   int length = snprintf(text, sizeof(text), "%.1f %.1f", throttle_curve, turn_curve);
-  Brain.SDcard.savefile(CURVE_FILE, (uint8_t*)text, length);
+  Brain.SDcard.savefile(curve_file(), (uint8_t*)text, length);
 }
 
 void load_saved_curves() {
-  if (!curve_tuning || !Brain.SDcard.isInserted() || !Brain.SDcard.exists(CURVE_FILE)) return;
+  if (!curve_tuning || !Brain.SDcard.isInserted() || !Brain.SDcard.exists(curve_file())) return;
   char text[40] = {0};
-  Brain.SDcard.loadfile(CURVE_FILE, (uint8_t*)text, sizeof(text) - 1);
+  Brain.SDcard.loadfile(curve_file(), (uint8_t*)text, sizeof(text) - 1);
   float throttle = 0, turning = 0;
   if (sscanf(text, "%f %f", &throttle, &turning) == 2) {
     throttle_curve = clamp(throttle, 0, 10);
@@ -213,7 +228,9 @@ void update() {
 
   if (curve_tuning) tune_curves();
   update_buttons();
-  drive();
+  // A one-button sequence that moves the chassis has the drive until it
+  // finishes or the driver moves a stick.
+  if (!Sequence::chassis_busy()) drive();
 }
 
 void check_overheat() {

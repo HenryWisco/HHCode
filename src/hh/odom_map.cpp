@@ -127,6 +127,24 @@ void draw() {
   } else if (chassis.is_mirrored()) {
     Brain.Screen.printAt(222, 200, false, "Mirrored auton");
   }
+
+  // Wall sensors, if the robot has any: the first letter of where each one
+  // points and what it reads in inches ("--" when it sees nothing).
+  if (walls::sensor_count() > 0) {
+    static const char FACING_LETTERS[] = {'F', 'R', 'B', 'L'};
+    char text[40] = "Walls";
+    int length = 5;
+    for (int i = 0; i < walls::sensor_count() && length < 30; i++) {
+      WallSensor* sensor = walls::sensor_at(i);
+      float reading = sensor->inches();
+      if (reading < 0) {
+        length += snprintf(text + length, sizeof(text) - length, " %c--", FACING_LETTERS[sensor->facing()]);
+      } else {
+        length += snprintf(text + length, sizeof(text) - length, " %c%.0f", FACING_LETTERS[sensor->facing()], reading);
+      }
+    }
+    Brain.Screen.printAt(222, 228, false, "%s", text);
+  }
 }
 
 }  // namespace odom_map

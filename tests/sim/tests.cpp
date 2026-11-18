@@ -1631,6 +1631,307 @@ TEST(pto_can_start_on_the_mechanism) {
 #endif
 
 /*---------------------------------------------------------------------------*/
+/*  One-button sequences, match timer, driver profiles and wall resets       */
+/*---------------------------------------------------------------------------*/
+
+#if SIM_CONFIG == 1
+// Holds L2 and taps another button: the shift combos the sequences are on.
+static void shift_tap(const char* name) {
+  sim::set_button("L2", true);
+  sim::tap(name);
+  sim::set_button("L2", false);
+}
+
+TEST(sequence_runs_its_steps_in_order_while_the_driver_drives) {
+  boot();
+  sim::set_mode(sim::DRIVER);
+  sim::run(50);
+  shift_tap("B");
+  CHECK(score_high.is_running());
+  CHECK_NEAR(lift.target(), 110, 0.01);      // step 1: lift up
+  CHECK(!intake.is_spinning());              // step 2 waits for the lift
+
+  sim::set_axis(3, 100);                     // the driver can still drive
+  sim::run(100);
+  CHECK(fabs(sim::motor(vex::PORT1).volts) > 6);
+  sim::set_axis(3, 0);
+
+  // Wait for the lift to arrive: then the intake runs backwards for 400 ms.
+  for (int i = 0; i < 300 && !intake.is_spinning(); i++) sim::run(10);
+  CHECK(intake.commanded() < 0);
+  CHECK_NEAR(lift.position(), 110, 4);
+  sim::run(600);
+  CHECK(!intake.is_spinning());              // last steps: stop, lift back down
+  CHECK_NEAR(lift.target(), 0, 0.01);
+  CHECK(!score_high.is_running());
+  CHECK(sequence_cancels == 0);              // finishing is not cancelling
+
+  shift_tap("B");                            // and it can run again
+  CHECK(score_high.is_running());
+  CHECK_NEAR(lift.target(), 110, 0.01);
+}
+
+TEST(sequence_second_press_cancels_it) {
+  boot();
+  sim::set_mode(sim::DRIVER);
+  sim::run(50);
+  shift_tap("B");
+  for (int i = 0; i < 300 && !intake.is_spinning(); i++) sim::run(10);
+  CHECK(intake.is_spinning());
+  shift_tap("B");                            // cancelled in the middle of the 400 ms wait
+  CHECK(!score_high.is_running());
+  CHECK(sequence_cancels == 1);
+  CHECK(!intake.is_spinning());              // on_cancel stopped it
+  sim::run(1000);
+  CHECK_NEAR(lift.target(), 110, 0.01);      // the later steps never ran
+}
+
+TEST(sequence_that_drives_has_the_chassis_until_a_stick_moves) {
+  boot();
+  sim::set_mode(sim::DRIVER);
+  sim::run(50);
+  shift_tap("Y");
+  CHECK(back_up.is_running());
+  sim::run(300);
+  CHECK(robot.y < -1);                       // backing up with the sticks centred
+  double y = robot.y;
+  sim::run(200);
+  CHECK(robot.y < y);
+
+  sim::set_axis(3, 100);                     // the driver takes over
+  sim::run(100);
+  CHECK(!back_up.is_running());
+  CHECK(sim::motor(vex::PORT3).command == sim::MotorState::VOLTAGE);
+  CHECK(sim::motor(vex::PORT3).volts > 6);   // right side forward: the stick, not the sequence
+  sim::set_axis(3, 0);
+  sim::run(500);
+
+  double start_y = robot.y;                  // left alone, it runs to the end
+  shift_tap("Y");
+  sim::run(5000);
+  CHECK(!back_up.is_running());
+  CHECK_NEAR(robot.y - start_y, -12, 1.5);
+  CHECK_NEAR(heading_off(90), 0, 3);
+  sim::set_axis(3, 100);                     // and then the sticks work again
+  sim::run(200);
+  CHECK(sim::motor(vex::PORT3).volts > 6);
+}
+
+TEST(sequence_stops_when_the_robot_is_disabled) {
+  boot(true);
+  sim::set_mode(sim::DRIVER);
+  sim::run(50);
+  score_high.start();
+  sim::run(100);
+  CHECK(score_high.is_running());
+  sim::set_mode(sim::DISABLED);
+  sim::run(100);
+  CHECK(!score_high.is_running());
+  score_high.start();                        // can't be started while disabled
+  CHECK(!score_high.is_running());
+
+  sim::set_mode(sim::AUTONOMOUS, false);     // in an auton: start, then wait for it
+  score_high.start();
+  score_high.wait();
+  CHECK(!score_high.is_running());
+  CHECK_NEAR(lift.target(), 0, 0.01);
+}
+
+TEST(match_timer_warns_and_unlocks_the_endgame) {
+  boot(true);
+  CHECK(!hh::match_timer::running());
+  sim::set_mode(sim::DRIVER);
+  sim::run(100);
+  CHECK(hh::match_timer::running());
+  CHECK_NEAR(hh::match_timer::time_left(), 105, 0.5);
+  CHECK(!hh::match_timer::in_endgame());
+
+  int rumbles = sim::rumbles();
+  shift_tap("X");                            // too early: a short buzz and nothing else
+  CHECK(endgame_presses == 0);
+  CHECK(sim::rumbles() == rumbles + 1);
+
+  rumbles = sim::rumbles();
+  sim::run(73000);
+  CHECK(sim::rumbles() == rumbles);          // quiet until 30 seconds are left
+  sim::run(3000);
+  CHECK(sim::rumbles() == rumbles + 1);
+  CHECK(hh::match_timer::in_endgame());
+  shift_tap("X");
+  CHECK(endgame_presses == 1);
+  sim::run(15000);
+  CHECK(sim::rumbles() == rumbles + 2);      // 15 seconds left
+  CHECK_NEAR(hh::match_timer::time_left(), 13.5, 1.5);
+
+  sim::set_mode(sim::DISABLED);              // the match ends
+  sim::run(100);
+  CHECK(!hh::match_timer::running());
+  CHECK(hh::match_timer::time_left() == -1);
+}
+
+TEST(match_timer_only_counts_in_practice_when_started) {
+  hh::match_timer::driver_length = 60;
+  hh::match_timer::show_on_controller = true;
+  hh::match_timer::warn_at(50, "...");
+  boot();
+  sim::set_mode(sim::DRIVER);
+  sim::run(80000);
+  CHECK(sim::rumbles() == 0);
+  CHECK(!hh::match_timer::running());
+  shift_tap("X");                            // no clock: endgame mechanisms just work
+  CHECK(endgame_presses == 1);
+
+  hh::match_timer::start();
+  sim::run(500);
+  CHECK(hh::match_timer::running());
+  CHECK(sim::rumbles() == 0);
+  CHECK(contains(sim::controller_line(2), "Time 0:59"));
+  sim::run(10000);
+  CHECK(sim::rumbles() == 1);                // the extra warning at 50 seconds left
+  sim::run(21000);
+  CHECK(sim::rumbles() == 2);                // 30 left
+  sim::run(31000);
+  CHECK(sim::rumbles() == 3);                // 15 left, then the clock runs out
+  CHECK(!hh::match_timer::running());
+}
+#endif
+
+#if SIM_CONFIG == 2
+TEST(driver_profiles_are_picked_on_the_brain_and_saved) {
+  hh::driver::turn_scale = 0.9;
+  sim::sd_files()["hh_driver.txt"] = "Sam";
+  boot();
+  CHECK(strcmp(hh::profiles::selected_name(), "Sam") == 0);
+  CHECK(hh::driver::style == hh::TANK_STICKS);
+  CHECK_NEAR(hh::driver::throttle_curve, 3, 0.001);
+  CHECK_NEAR(hh::driver::turn_curve, 2, 0.001);
+  CHECK(sim::brain_shows("Driver: Sam"));
+
+  sim::tap_screen(350, 60);                  // "Driver: ..." -> the next driver
+  sim::run(100);
+  CHECK(strcmp(hh::profiles::selected_name(), "Jo") == 0);
+  CHECK(sim::brain_shows("Driver: Jo"));
+  CHECK(sim::sd_files()["hh_driver.txt"] == "Jo");
+  CHECK(hh::driver::style == hh::SPLIT_ARCADE);      // Sam's layout didn't leak into Jo's
+  CHECK_NEAR(hh::driver::throttle_curve, 0, 0.001);
+  CHECK_NEAR(hh::driver::turn_scale, 0.5, 0.001);
+  CHECK(strcmp(hh::selector::selected_name(), "Drive Test") == 0);   // the auton didn't change
+
+  sim::tap_screen(350, 60);                  // wraps round to the first
+  CHECK(strcmp(hh::profiles::selected_name(), "Alex") == 0);
+  CHECK_NEAR(hh::driver::turn_scale, 0.9, 0.001);    // the settings from configure_robot()
+
+  sim::tap_screen(400, 120);                 // the rest of the screen still picks autons
+  CHECK(strcmp(hh::selector::selected_name(), "Turn Test") == 0);
+  CHECK(strcmp(hh::profiles::selected_name(), "Alex") == 0);
+}
+
+TEST(driver_profiles_controller_arrows_and_their_own_curves) {
+  hh::driver::curve_tuning = true;
+  boot(true);
+  sim::tap("Down");                          // disabled on the field: Down = next driver
+  CHECK(strcmp(hh::profiles::selected_name(), "Sam") == 0);
+  CHECK(contains(sim::controller_line(2), "Driver: Sam"));
+  sim::tap("Up");
+  CHECK(strcmp(hh::profiles::selected_name(), "Alex") == 0);
+  sim::tap("Down");
+
+  sim::set_mode(sim::DRIVER);
+  sim::run(100);
+  sim::tap("Down");                          // not while driving
+  CHECK(strcmp(hh::profiles::selected_name(), "Sam") == 0);
+
+  sim::tap("Right");                         // live curve tuning: throttle 3 -> 3.5
+  CHECK_NEAR(hh::driver::throttle_curve, 3.5, 0.001);
+  CHECK(sim::sd_files().count("hh_curves_Sam.txt") == 1);
+  CHECK(sim::sd_files().count("hh_curves.txt") == 0);
+
+  hh::profiles::select(0);                   // Alex is untouched by Sam's tuning
+  CHECK_NEAR(hh::driver::throttle_curve, 0, 0.001);
+  hh::profiles::select(1);                   // and Sam gets the tuned curve back
+  CHECK_NEAR(hh::driver::throttle_curve, 3.5, 0.001);
+  CHECK_NEAR(hh::driver::turn_curve, 2, 0.001);
+}
+
+TEST(wall_reset_corrects_drift_in_x_and_y) {
+  boot_for_auton();
+  CHECK_NEAR(front_wall.inches(), 72 - 6.5, 0.1);
+  CHECK_NEAR(left_wall.inches(), 72 - 5.5, 0.1);
+
+  chassis.set_coordinates(3, -4, 0);         // odometry has drifted; the robot is really at (0, 0)
+  CHECK(hh::wall_reset() == 2);
+  CHECK_NEAR(chassis.get_X_position(), 0, 0.1);
+  CHECK_NEAR(chassis.get_Y_position(), 0, 0.1);
+  CHECK(strcmp(front_wall.status, "ok") == 0);
+
+  // Somewhere else, facing another way: the front sensor now measures X and
+  // the left one Y.
+  chassis.drive_distance(20);
+  chassis.turn_to_angle(90);
+  chassis.set_coordinates(robot.x + 2, robot.y - 3, chassis.get_absolute_heading());
+  CHECK(hh::wall_reset() == 2);
+  CHECK_NEAR(chassis.get_X_position(), robot.x, 0.2);
+  CHECK_NEAR(chassis.get_Y_position(), robot.y, 0.2);
+  CHECK_NEAR(heading_off(chassis.get_absolute_heading()), 0, 0.01);   // heading is left alone
+
+  // Tracking carries on from the corrected position.
+  chassis.drive_distance(10);
+  CHECK_NEAR(chassis.get_X_position(), robot.x, 0.5);
+  CHECK_NEAR(chassis.get_Y_position(), robot.y, 0.5);
+
+  chassis.set_coordinates(robot.x - 1, robot.y, chassis.get_absolute_heading());
+  CHECK(front_wall.reset());                 // one sensor on its own fixes one direction
+  CHECK_NEAR(chassis.get_X_position(), robot.x, 0.2);
+}
+
+TEST(wall_reset_ignores_readings_it_cannot_trust) {
+  boot_for_auton();
+  chassis.set_coordinates(1, 1, 0);
+
+  sim::block_distance(vex::PORT7, 20);       // a game piece in front of the front sensor
+  CHECK(hh::wall_reset() == 1);              // only the left sensor is believed
+  CHECK(strcmp(front_wall.status, "too far from expected") == 0);
+  CHECK_NEAR(chassis.get_X_position(), 0, 0.1);
+  CHECK_NEAR(chassis.get_Y_position(), 1, 0.1);
+  sim::block_distance(vex::PORT7, -1);
+
+  hh::walls::max_range = 30;                 // the walls are further away than that
+  CHECK(hh::wall_reset() == 0);
+  CHECK(strcmp(left_wall.status, "sees nothing") == 0);
+  CHECK(front_wall.inches() == -1);
+  hh::walls::max_range = 70;
+
+  chassis.turn_to_angle(45);                 // pointing into a corner
+  CHECK(hh::wall_reset() == 0);
+  CHECK(strcmp(front_wall.status, "not square to a wall") == 0);
+  CHECK_NEAR(chassis.get_Y_position(), 1, 0.3);
+
+  chassis.turn_to_angle(10);                 // a little off square is fine, and still exact
+  CHECK(hh::wall_reset() == 2);
+  CHECK_NEAR(chassis.get_X_position(), robot.x, 0.2);
+  CHECK_NEAR(chassis.get_Y_position(), robot.y, 0.2);
+}
+
+TEST(wall_reset_in_a_mirrored_auton_and_on_the_map) {
+  boot_for_auton();
+  // A mirrored auton thinks in mirror image: the robot is really 10 inches
+  // left of center, so the routine sees itself 10 inches right of center.
+  robot.x = -10;
+  chassis.set_mirrored(true);
+  hh::walls::max_correction = 0;             // the check is off: any correction is accepted
+  CHECK(hh::wall_reset() == 2);
+  CHECK_NEAR(chassis.get_X_position(), 10, 0.2);
+  CHECK_NEAR(chassis.get_Y_position(), 0, 0.2);
+  chassis.set_mirrored(false);
+
+  sim::set_mode(sim::DISABLED);
+  sim::tap_screen(110, 15);                  // the map lists what each wall sensor reads
+  sim::run(400);
+  CHECK(sim::brain_shows("Walls F66 L"));
+}
+#endif
+
+/*---------------------------------------------------------------------------*/
 /*  Runner                                                                   */
 /*---------------------------------------------------------------------------*/
 
