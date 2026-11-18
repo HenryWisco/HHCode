@@ -20,6 +20,12 @@ public:
   /** Shown on the controller in warnings, e.g. "HOT: Intake 56C". */
   const char* name = "Mechanism";
 
+  /**
+   * While true, update() isn't called and the built-in blocks ignore
+   * commands. hh::Pto sets this while a mechanism's motors are busy driving.
+   */
+  bool paused = false;
+
   /** Runs once from hh::init(), before the match starts. */
   virtual void init() {}
   /** Runs every 10 ms while the robot is enabled. */

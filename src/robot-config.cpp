@@ -41,6 +41,17 @@ controller Controller(primary);
 /*  Follow the instructions below to enter the physical constants for your   */
 /*  drivetrain. JAR-Template's docs explain each one in detail:              */
 /*  https://jacksonarearobotics.github.io/JAR-Template/                      */
+/*                                                                           */
+/*  THE SHORT WAY: you can replace this whole block, from "Drive chassis("   */
+/*  down to its closing ");", with one line. Ports are plain numbers, and a  */
+/*  minus sign means reversed. You don't make drive motors in section 1.     */
+/*                                                                           */
+/*    Drive chassis = hh::Chassis::tank({1, -2, 3}, {-4, 5, -6},             */
+/*                                      10, 3.25, ratio6_1, 450);            */
+/*                                                                           */
+/*  That is: left ports, right ports, inertial port, wheel diameter,         */
+/*  cartridge, and how fast the wheels turn in rpm. Mecanum, X-drive and     */
+/*  tracking wheels are in docs/CONFIG-RECIPES.md.                           */
 /*---------------------------------------------------------------------------*/
 
 Drive chassis(
@@ -136,6 +147,7 @@ PORT3,     -PORT4,
 /*    hh::Velocity   flywheel(FlywheelMotor, 3600);                          */
 /*    hh::Pneumatic  mogo_clamp(Brain.ThreeWirePort.A);                      */
 /*    hh::ColorSorter sorter(RingSensor);                                    */
+/*    hh::Pto        pto(LeftPtoMotor, RightPtoMotor);                       */
 /*---------------------------------------------------------------------------*/
 
 // Add your mechanisms here:

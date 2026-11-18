@@ -40,6 +40,7 @@ private:
 
   // HHCode: state for async motions, wait_until(), slew and stall detection.
   int holonomic_ports[4];
+  bool holonomic_reversed[4];
   bool next_async = false;
   bool next_chain = false;
   bool in_motion_task = false;
@@ -197,6 +198,9 @@ public:
   void holonomic_drive_to_pose(float X_position, float Y_position, float angle, float drive_max_voltage, float heading_max_voltage, float drive_settle_error, float drive_settle_time, float drive_timeout);
   void holonomic_drive_to_pose(float X_position, float Y_position, float angle, float drive_max_voltage, float heading_max_voltage, float drive_settle_error, float drive_settle_time, float drive_timeout, float drive_kp, float drive_ki, float drive_kd, float drive_starti, float heading_kp, float heading_ki, float heading_kd, float heading_starti);
 
+  // HHCode: the constructor hh::Chassis uses (holonomic motors as port + reversed + cartridge).
+  Drive(enum::drive_setup drive_setup, motor_group DriveL, motor_group DriveR, int gyro_port, float wheel_diameter, float wheel_ratio, float gyro_scale, const int holonomic_port[4], const bool holonomic_reverse[4], vex::gearSetting holonomic_cartridge, int ForwardTracker_port, float ForwardTracker_diameter, float ForwardTracker_center_distance, int SidewaysTracker_port, float SidewaysTracker_diameter, float SidewaysTracker_center_distance);
+
   void control_arcade();
   void control_tank();
   void control_holonomic();
@@ -282,6 +286,13 @@ public:
   bool is_mirrored();
   // The inertial sensor's rotation in degrees, not wrapped to 0-360.
   float get_rotation();
+
+  // PTO: motors that are driving with each side right now. hh::Pto fills
+  // these in; spin_side() and stop_side() run a whole side including them.
+  std::vector<vex::motor*> pto_left;
+  std::vector<vex::motor*> pto_right;
+  void spin_side(bool left_side, float voltage);
+  void stop_side(bool left_side, vex::brakeType mode);
 
   // Mecanum / X-drive: tell the chassis which cartridge the four wheel motors
   // use, so strafe distances are measured correctly. Not needed for green

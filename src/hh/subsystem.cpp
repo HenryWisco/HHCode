@@ -56,7 +56,7 @@ static int background_task() {
 
     if (enabled) {
       for (int i = 0; i < subsystem_total; i++) {
-        subsystem_list[i]->update();
+        if (!subsystem_list[i]->paused) subsystem_list[i]->update();
       }
       for (auto& trigger : triggers()) {
         bool now = trigger.condition();
@@ -66,6 +66,7 @@ static int background_task() {
     }
     driver::check_overheat();
     ports::check();
+    odom_map::update();
     vex::task::sleep(10);
   }
   return 0;
@@ -91,7 +92,11 @@ void init() {
   if (started) return;
   started = true;
 
+  apply_chassis_drive_type();
   calibrate_inertial();
+  // Start position tracking at (0, 0) facing 0, so the odometry map works
+  // straight away. An auton that calls set_coordinates() moves it from there.
+  if (chassis.drive_setup != ZERO_TRACKER_NO_ODOM) chassis.set_coordinates(0, 0, 0);
   for (int i = 0; i < subsystem_total; i++) {
     subsystem_list[i]->init();
   }

@@ -60,6 +60,18 @@ proposing features.
   background task started in auton is still alive in driver control.
 - Unconfirmed on hardware: whether a motor's `reversed` flag and cartridge
   belong to the `motor` object or to the port. The library assumes the object.
+- **Never assign one `vex::motor_group` to another** (`a = b;`). The SDK class
+  has a copy constructor but no safe assignment. Copy-construct, or add motors
+  with `group(motor)`. This is why PTO motors live in `chassis.pto_left` /
+  `pto_right` (lists of motor pointers) instead of being swapped in and out of
+  `DriveL` / `DriveR`. Anything that powers a whole tank side must use
+  `chassis.spin_side()` / `stop_side()` so PTO motors are included.
+- `hh::Chassis` relies on C++17 guaranteed copy elision
+  (`Drive chassis = hh::Chassis::tank(...);` builds the `Drive` in place).
+  Don't change it to something that copies or moves a `Drive`.
+- JAR only starts position tracking inside `set_coordinates()`. `hh::init()`
+  now calls `set_coordinates(0, 0, 0)` on odom setups so the map works before
+  any auton runs.
 - `vex.h` defines the global `wait(time, msec)`. Class methods can still be named `wait`.
 - VEX API reference: https://api.vex.com/v5/home/cpp/index.html
 

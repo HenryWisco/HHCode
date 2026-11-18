@@ -14,6 +14,53 @@ the robot's turning center to the wheel.
 Each recipe also says what to set for `hh::driver::drive_type` in
 `configure_robot()` (section 4).
 
+## The short way: one line
+
+`hh::Chassis` builds the same chassis from one line. Ports are plain numbers
+from 1 to 21, a minus sign means reversed, and you don't create drive motors
+in section 1 at all. Replace the whole block from `Drive chassis(` through
+`);` with one of these and change the numbers.
+
+```cpp
+// Tank: left ports, right ports, inertial port, wheel diameter, cartridge, wheel rpm
+Drive chassis = hh::Chassis::tank({1, -2, 3}, {-4, 5, -6}, 10, 3.25, ratio6_1, 450);
+
+// Mecanum or X-drive: left front, right front, left back, right back, then the same
+Drive chassis = hh::Chassis::mecanum(1, -2, 3, -4, 10, 4, ratio18_1, 200);
+Drive chassis = hh::Chassis::x_drive(1, -2, 3, -4, 10, 3.25, ratio6_1, 300);
+```
+
+- **Cartridge:** `ratio36_1` is red (100 rpm), `ratio18_1` is green (200 rpm),
+  `ratio6_1` is blue (600 rpm).
+- **Wheel rpm** is how fast the wheels turn: cartridge rpm x motor gear teeth
+  / wheel gear teeth. Blue motors with a 36-tooth gear driving a 48-tooth gear
+  on the wheel is 600 x 36 / 48 = 450. Direct drive is just the cartridge rpm.
+- Every drive motor must push the robot forward when it spins forward. If one
+  runs backwards, add or remove its minus sign.
+- `mecanum(...)` and `x_drive(...)` set `hh::driver::drive_type` for you, and
+  they give you position tracking from the drive motors with nothing extra.
+  A reversed motor on port 1 is fine here.
+
+Position tracking is added on the end of the line:
+
+```cpp
+// Tank, tracking from the drive motors. 11.5 = inches between left and right wheels.
+Drive chassis = hh::Chassis::tank({1, 2}, {-3, -4}, 10, 3.25, ratio6_1, 360).odom(11.5);
+
+// Two tracking wheels on rotation sensors: port, wheel diameter, distance from center.
+Drive chassis = hh::Chassis::tank({1, 2}, {-3, -4}, 10, 3.25, ratio6_1, 360)
+                  .forward_tracker(12, 2.75, -2)     // 2" left of center
+                  .sideways_tracker(13, 2.75, 5.5);  // 5.5" behind center
+```
+
+A minus sign on a tracker port makes it count the other way. Trackers on
+3-wire encoders use `.forward_encoder('A', 2.75, -2)` and
+`.sideways_encoder('C', 2.75, 5.5)` (the letter is the first of the encoder's
+two ports). `.gyro_scale(357)` sets the gyro scale.
+
+The rest of this page is the long way, which does the same things and matches
+the JAR-Template docs.
+
 ## Tank drive, no tracking wheels (start here)
 
 No position tracking. `drive_distance`, `turn_to_angle` and swings all work.

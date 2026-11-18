@@ -150,6 +150,12 @@ public:
     _add(m, rest...);
   }
 
+  // Adds motors to the group, like the real API.
+  template <typename... Rest>
+  void operator()(motor& m, Rest&... rest) {
+    _add(m, rest...);
+  }
+
   int32_t count() { return (int32_t)_motors.size(); }
   void spin(directionType dir, double value, voltageUnits units) { for (motor& m : _motors) m.spin(dir, value, units); }
   void spin(directionType dir, double value, velocityUnits units) { for (motor& m : _motors) m.spin(dir, value, units); }

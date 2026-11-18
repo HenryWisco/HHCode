@@ -5,6 +5,7 @@ namespace hh {
 Spinner::Spinner(vex::motor_group motors, int) : motors(motors) { name = "Spinner"; }
 
 void Spinner::apply(float percent) {
+  if (paused) return;   // the motors are doing something else (see hh::Pto)
   if (percent == 0) {
     motors.stop(stop_mode);
   } else if (velocity_mode) {
@@ -15,6 +16,7 @@ void Spinner::apply(float percent) {
 }
 
 void Spinner::spin(float percent) {
+  if (paused) percent = 0;
   percent = clamp(percent, -100, 100);
   if (percent != command_) {
     command_start_ = now_ms();
@@ -28,6 +30,7 @@ void Spinner::spin(float percent) {
 }
 
 void Spinner::override_for(float percent, int ms) {
+  if (paused) return;
   unjam_end_ = 0;
   override_end_ = now_ms() + ms;
   apply(clamp(percent, -100, 100));

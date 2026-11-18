@@ -14,22 +14,26 @@ void vexcodeInit(void) {}
 /*  is mounted mirrored, so its motors are reversed.                         */
 /*---------------------------------------------------------------------------*/
 
+#if SIM_CONFIG == 1
+// The long JAR-Template way.
 motor LeftA = motor(PORT1, ratio6_1, true);
 motor LeftB = motor(PORT2, ratio6_1, true);
 motor RightA = motor(PORT3, ratio6_1, false);
 motor RightB = motor(PORT4, ratio6_1, false);
 
 Drive chassis(
-#if SIM_CONFIG == 1
   ZERO_TRACKER_NO_ODOM,
-#else
-  TANK_TWO_ROTATION,
-#endif
   motor_group(LeftA, LeftB), motor_group(RightA, RightB),
   PORT10, 3.25, 0.6, 360,
   PORT15, -PORT16, PORT17, -PORT18,
   PORT12, 2.75, -2,
   PORT13, 2.75, 5.5);
+#else
+// The short hh::Chassis way. 360 rpm on blue motors is the same 0.6 ratio.
+Drive chassis = hh::Chassis::tank({-1, -2}, {3, 4}, 10, 3.25, ratio6_1, 360)
+                  .forward_tracker(12, 2.75, -2)
+                  .sideways_tracker(13, 2.75, 5.5);
+#endif
 
 void describe_robot() {
   sim::Robot& r = sim::robot;
@@ -68,6 +72,13 @@ hh::Pneumatic ejector(Brain.ThreeWirePort.C);
 optical RingSensor = optical(PORT14);
 hh::ColorSorter sorter(RingSensor);
 
+// A PTO: one more motor per side that can leave the drive to run a winch.
+motor PtoLeft = motor(PORT19, ratio6_1, true);
+motor PtoRight = motor(PORT20, ratio6_1, false);
+hh::Pneumatic pto_piston(Brain.ThreeWirePort.D);
+hh::Spinner winch(PtoLeft, PtoRight);
+hh::Pto pto(PtoLeft, PtoRight);
+
 int b_presses = 0;
 int y_state = 0;
 bool when_flag = false;
@@ -88,6 +99,9 @@ void configure_robot() {
   flywheel.bind_toggle(Controller.ButtonX, 2400);
   sorter.eject_with(ejector);
   sorter.bind_toggle(Controller.ButtonRight);
+  pto.use_piston(pto_piston);
+  pto.controls(winch);
+  pto.bind_toggle(hh::shifted(Controller.ButtonL2, Controller.ButtonA));
   hh::on_press(Controller.ButtonB, [] { b_presses++; });
   hh::toggle(Controller.ButtonY, [] { y_state = 1; }, [] { y_state = 2; });
   hh::when([] { return when_flag; }, [] { when_fires++; });
@@ -111,6 +125,8 @@ const double WHEEL_DIAMETER = 3.25;
 const double WHEEL_RATIO = 0.5;
 #endif
 
+#if SIM_CONFIG == 3
+// The long JAR-Template way.
 motor FrontLeft = motor(PORT1, CARTRIDGE, false);
 motor FrontRight = motor(PORT2, CARTRIDGE, true);
 motor BackLeft = motor(PORT3, CARTRIDGE, false);
@@ -123,6 +139,10 @@ Drive chassis(
   PORT1, -PORT2, PORT3, -PORT4,
   PORT12, 2.75, 0,
   PORT13, 2.75, 0);
+#else
+// The short hh::Chassis way. It sets the drive type and the cartridge too.
+Drive chassis = hh::Chassis::x_drive(1, -2, 3, -4, 10, 3.25, ratio6_1, 300);
+#endif
 
 void describe_robot() {
   sim::Robot& r = sim::robot;
@@ -140,11 +160,10 @@ void describe_robot() {
 }
 
 void configure_robot() {
-  hh::driver::drive_type = SIM_CONFIG == 3 ? hh::MECANUM : hh::X_DRIVE;
-  hh::driver::style = hh::HOLONOMIC;
-#if SIM_CONFIG == 4
-  chassis.set_holonomic_cartridge(ratio6_1);
+#if SIM_CONFIG == 3
+  hh::driver::drive_type = hh::MECANUM;
 #endif
+  hh::driver::style = hh::HOLONOMIC;
 }
 
 #else

@@ -25,6 +25,7 @@ void Positioner::go_to(const char* preset_name) {
 }
 
 void Positioner::go_to(float position) {
+  if (paused) return;   // the motors are doing something else (see hh::Pto)
   if (use_limits) position = clamp(position, min_position, max_position);
   target_ = position;
   integral_ = 0;
@@ -43,13 +44,14 @@ void Positioner::wait(int timeout_ms) {
 void Positioner::hold() { go_to(position()); }
 
 void Positioner::move(float voltage) {
+  if (paused) return;
   manual_voltage_ = clamp(voltage, -12, 12);
   mode_ = MANUAL;
 }
 
 void Positioner::stop() {
   mode_ = IDLE;
-  motors.stop(vex::brakeType::coast);
+  if (!paused) motors.stop(vex::brakeType::coast);
 }
 
 void Positioner::zero(float position) {

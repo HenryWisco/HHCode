@@ -405,10 +405,10 @@ TEST(ports_page_and_unplugged_warning) {
   sim::devices[vex::PORT10] = kDeviceTypeImuSensor;
   sim::motor(vex::PORT5).temperature = 61;
   boot();
-  CHECK(sim::brain_shows("Ports >"));
+  CHECK(sim::brain_shows("Ports>"));
   CHECK(!sim::brain_shows("NO IMU!"));
 
-  sim::tap_screen(100, 15);              // the title bar opens the ports page
+  sim::tap_screen(30, 15);               // "Ports>" in the title bar opens the ports page
   sim::run(600);
   CHECK(sim::brain_shows("tap to go back"));
   CHECK(sim::brain_shows("IMU"));
@@ -1437,6 +1437,196 @@ TEST(x_drive_distances_allow_for_the_45_degree_wheels) {
   // The motors turned 24 / sqrt(2) inches worth, not 24.
   double wheel_inches = chassis.DriveLF.position(deg) * 3.14159265 * 3.25 * 0.5 / 360.0;
   CHECK_NEAR(wheel_inches, 24 / sqrt(2.0), 1.5);
+}
+#endif
+
+/*---------------------------------------------------------------------------*/
+/*  Odometry map, hh::Chassis and PTO                                        */
+/*---------------------------------------------------------------------------*/
+
+TEST(odom_map_opens_from_the_title_bar) {
+  boot();
+  CHECK(sim::brain_shows("Map>"));
+  sim::tap_screen(110, 15);              // "Map>" in the title bar
+  sim::run(400);
+  CHECK(sim::brain_shows("Odometry map"));
+  CHECK(sim::brain_shows("H "));
+#if SIM_CONFIG == 1
+  CHECK(sim::brain_shows("No odometry"));
+#else
+  CHECK(sim::brain_shows("X "));
+  CHECK(sim::brain_lines() >= 13);       // the grid and the robot arrow, all on the screen
+#endif
+  CHECK(strcmp(hh::selector::selected_name(), "Drive Test") == 0);
+
+  sim::tap_screen(300, 120);             // any tap goes back, without changing the auton
+  sim::run(200);
+  CHECK(sim::brain_shows("Auton 1 of"));
+  CHECK(strcmp(hh::selector::selected_name(), "Drive Test") == 0);
+
+  sim::tap_screen(30, 15);               // "Ports>" still opens the ports page
+  sim::run(600);
+  CHECK(sim::brain_shows("Ports  (tap to go back)"));
+}
+
+TEST(chassis_builder_picks_the_right_setup) {
+  boot();
+  Drive plain = hh::Chassis::tank({1, -2}, {-3, 4}, 10, 4, ratio18_1, 200);
+  CHECK(plain.drive_setup == ZERO_TRACKER_NO_ODOM);
+  Drive motor_odom = hh::Chassis::tank({1, -2}, {-3, 4}, 10, 4, ratio18_1, 200).odom(12);
+  CHECK(motor_odom.drive_setup == ZERO_TRACKER_ODOM);
+  Drive one_forward = hh::Chassis::tank({1}, {-3}, 10, 4, ratio18_1, 200).forward_encoder('C', 2.75, 1);
+  CHECK(one_forward.drive_setup == TANK_ONE_FORWARD_ENCODER);
+  Drive one_sideways = hh::Chassis::tank({1}, {-3}, 10, 4, ratio18_1, 200).odom(12).sideways_tracker(-7, 2, 3);
+  CHECK(one_sideways.drive_setup == TANK_ONE_SIDEWAYS_ROTATION);
+  Drive two = hh::Chassis::tank({1}, {-3}, 10, 4, ratio18_1, 200).forward_tracker(6, 2, 1).sideways_tracker(7, 2, 3);
+  CHECK(two.drive_setup == TANK_TWO_ROTATION);
+  Drive mecanum = hh::Chassis::mecanum(1, -2, 3, -4, 10, 4, ratio18_1, 200);
+  CHECK(mecanum.drive_setup == HOLONOMIC_ZERO_TRACKER_ODOM);
+  Drive tracked = hh::Chassis::mecanum(1, -2, 3, -4, 10, 4, ratio18_1, 200)
+                    .forward_encoder('A', 2.75, 1).sideways_encoder('C', 2.75, 3);
+  CHECK(tracked.drive_setup == HOLONOMIC_TWO_ENCODER);
+}
+
+#if SIM_CONFIG != 1
+TEST(odom_map_draws_a_trail_and_stays_up_in_auton) {
+  boot(true);
+  sim::tap_screen(110, 15);
+  sim::run(300);
+  sim::set_mode(sim::AUTONOMOUS, false);
+  chassis.drive_distance(24);
+  sim::run(300);
+  CHECK(sim::brain_shows("Odometry map"));   // not cleared when the auton started
+  CHECK(hh::odom_map::trail_points() >= 8);
+  CHECK(sim::brain_lines() >= 13 + 6);       // grid, arrow and trail, all on the screen
+
+  hh::odom_map::center_x = 500;              // the robot is nowhere near what the map shows
+  sim::run(300);
+  CHECK(sim::brain_shows("off the map"));
+  CHECK(sim::brain_lines() == 10);           // only the grid: nothing is drawn outside the map
+
+  hh::odom_map::clear_trail();
+  CHECK(hh::odom_map::trail_points() == 0);
+}
+#endif
+
+#if SIM_CONFIG == 2
+TEST(chassis_builder_tank_with_trackers) {
+  boot_for_auton();
+  CHECK(chassis.drive_setup == TANK_TWO_ROTATION);
+  CHECK(hh::driver::drive_type == hh::TANK);
+  chassis.drive_distance(24);
+  CHECK_NEAR(robot.y, 24, 1);
+  CHECK_NEAR(chassis.get_Y_position(), 24, 1);
+  chassis.turn_to_angle(90);
+  CHECK_NEAR(heading_off(90), 0, 2);
+}
+#endif
+
+#if SIM_CONFIG == 4
+TEST(chassis_builder_sets_the_drive_type) {
+  boot_for_auton();
+  CHECK(chassis.drive_setup == HOLONOMIC_ZERO_TRACKER_ODOM);
+  CHECK(hh::driver::drive_type == hh::X_DRIVE);
+}
+#endif
+
+#if SIM_CONFIG == 1
+TEST(pto_motors_drive_with_their_side_until_shifted) {
+  boot();
+  CHECK(pto.is_driving());
+  CHECK(sim::digital(3));                // piston on port D: extended = on the drive
+  sim::set_mode(sim::DRIVER);
+  sim::set_axis(3, 100);
+  sim::run(200);
+  CHECK(fabs(sim::motor(vex::PORT1).volts) > 6);
+  CHECK_NEAR(sim::motor(PTO_LEFT_PORT).volts, sim::motor(vex::PORT1).volts, 0.01);
+  CHECK_NEAR(sim::motor(PTO_RIGHT_PORT).volts, sim::motor(vex::PORT3).volts, 0.01);
+
+  winch.spin();                          // ignored: its motors are busy driving
+  sim::run(50);
+  CHECK(!winch.is_spinning());
+  CHECK_NEAR(sim::motor(PTO_LEFT_PORT).volts, sim::motor(vex::PORT1).volts, 0.01);
+
+  pto.to_mechanism();
+  sim::run(50);
+  CHECK(!pto.is_driving());
+  CHECK(!sim::digital(3));
+  CHECK(sim::motor(PTO_LEFT_PORT).command == sim::MotorState::STOPPED);
+  CHECK(sim::motor(PTO_RIGHT_PORT).command == sim::MotorState::STOPPED);
+  CHECK(sim::motor(vex::PORT1).command == sim::MotorState::VOLTAGE);   // the rest still drive
+
+  winch.spin();
+  sim::run(50);
+  CHECK(winch.is_spinning());
+  CHECK(sim::motor(PTO_LEFT_PORT).command == sim::MotorState::VOLTAGE);
+  CHECK_NEAR(fabs(sim::motor(PTO_LEFT_PORT).volts), 12, 0.01);
+  CHECK_NEAR(fabs(sim::motor(PTO_RIGHT_PORT).volts), 12, 0.01);
+
+  pto.to_drive();                        // the winch lets go and the motors rejoin the drive
+  sim::run(50);
+  CHECK(!winch.is_spinning());
+  CHECK(sim::digital(3));
+  CHECK_NEAR(sim::motor(PTO_LEFT_PORT).volts, sim::motor(vex::PORT1).volts, 0.01);
+  CHECK_NEAR(sim::motor(PTO_RIGHT_PORT).volts, sim::motor(vex::PORT3).volts, 0.01);
+}
+
+TEST(pto_button_toggles_without_firing_the_plain_button) {
+  boot();
+  sim::set_mode(sim::DRIVER);
+  sim::run(50);
+  bool clamp_before = sim::digital(0);
+  sim::set_button("L2", true);
+  sim::tap("A");
+  sim::set_button("L2", false);
+  CHECK(!pto.is_driving());
+  CHECK(sim::digital(0) == clamp_before);   // plain A (the clamp) didn't fire
+  sim::set_button("L2", true);
+  sim::tap("A");
+  sim::set_button("L2", false);
+  CHECK(pto.is_driving());
+}
+
+TEST(pto_motors_follow_chassis_motions) {
+  boot_for_auton();
+  chassis.async().drive_distance(24);
+  sim::run(150);
+  CHECK(fabs(sim::motor(PTO_LEFT_PORT).volts) > 3);
+  CHECK_NEAR(sim::motor(PTO_LEFT_PORT).volts, sim::motor(vex::PORT1).volts, 0.01);
+  CHECK_NEAR(sim::motor(PTO_RIGHT_PORT).volts, sim::motor(vex::PORT3).volts, 0.01);
+  chassis.wait();
+  chassis.drive_stop(brake);
+  sim::run(20);
+  CHECK(sim::motor(PTO_LEFT_PORT).command == sim::MotorState::STOPPED);
+  CHECK(sim::motor(PTO_LEFT_PORT).stopping == vex::brakeType::brake);
+
+  chassis.async().left_swing_to_angle(90);   // left side powered, right side held
+  sim::run(100);
+  CHECK(sim::motor(PTO_LEFT_PORT).command == sim::MotorState::VOLTAGE);
+  CHECK(sim::motor(PTO_RIGHT_PORT).command == sim::MotorState::STOPPED);
+  CHECK(sim::motor(PTO_RIGHT_PORT).stopping == vex::brakeType::hold);
+  chassis.cancel_motion();
+
+  pto.to_mechanism();                        // now motions leave the PTO motors alone
+  chassis.async().drive_distance(12);
+  sim::run(150);
+  CHECK(sim::motor(vex::PORT1).command == sim::MotorState::VOLTAGE);
+  CHECK(sim::motor(PTO_LEFT_PORT).command == sim::MotorState::STOPPED);
+  chassis.wait();
+}
+
+TEST(pto_can_start_on_the_mechanism) {
+  pto.start_on_drive = false;
+  boot();
+  CHECK(!pto.is_driving());
+  CHECK(!sim::digital(3));
+  sim::set_mode(sim::DRIVER);
+  sim::set_axis(3, 100);
+  sim::run(200);
+  CHECK(sim::motor(PTO_LEFT_PORT).command == sim::MotorState::STOPPED);
+  winch.reverse();
+  sim::run(50);
+  CHECK(sim::motor(PTO_LEFT_PORT).command == sim::MotorState::VOLTAGE);
 }
 #endif
 

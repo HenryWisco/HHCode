@@ -72,8 +72,8 @@ static void output(float* percents, int count) {
   }
 
   if (count == 2) {
-    chassis.DriveL.spin(vex::fwd, volts[0], vex::volt);
-    chassis.DriveR.spin(vex::fwd, volts[1], vex::volt);
+    chassis.spin_side(true, volts[0]);
+    chassis.spin_side(false, volts[1]);
   } else {
     chassis.DriveLF.spin(vex::fwd, volts[0], vex::volt);
     chassis.DriveRF.spin(vex::fwd, volts[1], vex::volt);
